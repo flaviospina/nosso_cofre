@@ -1,0 +1,13 @@
+# Nosso Cofre — arquivos que nunca vão para o repositório
+.env
+storage/logs/*
+storage/cache/*
+storage/backups/*
+storage/uploads/*
+storage/exports/*
+storage/sessions/*
+!storage/**/.gitkeep
+node_modules/
+.DS_Store
+Thumbs.db
+*.zip

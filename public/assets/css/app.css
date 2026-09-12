@@ -1,0 +1,84 @@
+/* public/assets/css/app.css — estilos próprios do Nosso Cofre (mobile-first, complementa o Bootstrap 5.3) */
+:root {
+    --nc-brand: #0f766e;
+    --nc-brand-dark: #115e59;
+    --nc-income: #15803d;   /* verde: dinheiro entrando */
+    --nc-expense: #c2410c;  /* laranja: dinheiro saindo */
+    --nc-due: #ca8a04;      /* amarelo: conta a vencer */
+    --nc-late: #b91c1c;     /* vermelho: atrasada / duplicidade */
+    --nc-goal: #1d4ed8;     /* azul: meta batida */
+    --bs-primary: var(--nc-brand);
+    --bs-primary-rgb: 15, 118, 110;
+    --bs-link-color: var(--nc-brand);
+    --bs-link-color-rgb: 15, 118, 110;
+    --bs-link-hover-color: var(--nc-brand-dark);
+    --bs-link-hover-color-rgb: 17, 94, 89;
+}
+[data-bs-theme="dark"] {
+    --nc-brand: #2dd4bf;
+    --nc-brand-dark: #5eead4;
+    --bs-primary: var(--nc-brand);
+    --bs-primary-rgb: 45, 212, 191;
+    --bs-link-color: var(--nc-brand);
+    --bs-link-color-rgb: 45, 212, 191;
+    --bs-link-hover-color: var(--nc-brand-dark);
+    --bs-link-hover-color-rgb: 94, 234, 212;
+    --bs-body-bg: #0b1220;
+    --bs-body-color: #e5e7eb;
+}
+.btn-primary {
+    --bs-btn-bg: var(--nc-brand);
+    --bs-btn-border-color: var(--nc-brand);
+    --bs-btn-hover-bg: var(--nc-brand-dark);
+    --bs-btn-hover-border-color: var(--nc-brand-dark);
+    --bs-btn-active-bg: var(--nc-brand-dark);
+    --bs-btn-active-border-color: var(--nc-brand-dark);
+}
+[data-bs-theme="dark"] .btn-primary { --bs-btn-color: #062a27; --bs-btn-hover-color: #062a27; --bs-btn-active-color: #062a27; }
+.btn-outline-primary {
+    --bs-btn-color: var(--nc-brand);
+    --bs-btn-border-color: var(--nc-brand);
+    --bs-btn-hover-bg: var(--nc-brand);
+    --bs-btn-hover-border-color: var(--nc-brand);
+    --bs-btn-active-bg: var(--nc-brand);
+    --bs-btn-active-border-color: var(--nc-brand);
+}
+
+html, body { min-height: 100%; }
+.nc-body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.nc-main { flex: 1 0 auto; width: 100%; max-width: 1200px; margin: 0 auto; padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+.nc-header { position: sticky; top: 0; z-index: 1030; }
+.nc-navbar { background: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); padding-top: calc(.5rem + env(safe-area-inset-top)); }
+.nc-navbar .nav-link.btn-link { text-decoration: none; }
+.nc-footer { border-top: 1px solid var(--bs-border-color); flex-shrink: 0; }
+.nc-footer a { color: inherit; }
+
+.nc-btn-icon { border: 1px solid var(--bs-border-color); border-radius: 999px; width: 2.25rem; height: 2.25rem; display: inline-flex; align-items: center; justify-content: center; }
+.nc-avatar { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 999px; color: #fff; font-weight: 600; font-size: .85rem; background: #6c757d; }
+.nc-card { border-radius: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.nc-feature-icon { width: 3rem; height: 3rem; border-radius: .9rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+.nc-hero { border-radius: 1.25rem; }
+.nc-maxw-sm { max-width: 32rem; }
+.nc-maxw-md { max-width: 48rem; }
+.nc-pre { white-space: pre-wrap; word-break: break-word; max-height: 20rem; overflow: auto; }
+
+/* Cores semânticas de avisos (paleta testada para daltonismo: usa também ícone e texto, nunca só a cor) */
+.nc-income { color: var(--nc-income); }
+.nc-expense { color: var(--nc-expense); }
+.nc-due { color: var(--nc-due); }
+.nc-late { color: var(--nc-late); }
+.nc-goal { color: var(--nc-goal); }
+
+/* Toasts (pré-visualização de avisos e mensagens em tempo real) */
+.nc-toast-area { position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 1080; display: flex; flex-direction: column; gap: .5rem; max-width: min(24rem, calc(100vw - 2rem)); }
+.nc-toast { border-left: .35rem solid var(--nc-brand); }
+
+/* Toque confortável no celular */
+@media (max-width: 575.98px) {
+    .btn, .form-control, .form-select { min-height: 2.75rem; }
+    .nc-hero .display-6 { font-size: 1.8rem; }
+}
+/* Respeita preferência de menos movimento */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

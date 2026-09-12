@@ -1,0 +1,20 @@
+# Nosso Cofre — .htaccess da RAIZ do projeto
+# Cenário de publicação: o projeto inteiro fica em public_html/cofre/ e a URL é https://itthrive.com.br/cofre
+# Tudo que não começa com "public/" é reescrito para dentro de public/, que é a única pasta realmente servida.
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?!public/)(.*)$ public/$1 [L]
+</IfModule>
+
+# Nunca servir arquivos de configuração, banco, logs ou documentação
+<FilesMatch "^(\.env.*|\.git.*|.*\.(sql|md|log|lock|ini|bak|dist))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
