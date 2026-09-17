@@ -1,23 +1,15 @@
-# Nosso Cofre — .htaccess da RAIZ do projeto
-# Cenário de publicação: o projeto inteiro fica em public_html/cofre/ e a URL é https://itthrive.com.br/cofre
-# Tudo que não começa com "public/" é reescrito para dentro de public/, que é a única pasta realmente servida.
-# Bloqueia listagem de diretório sem usar "Options" (não permitido no AllowOverride do HostGator e causa erro 500)
-IndexIgnore *
-
+# Nosso Cofre — .htaccess da RAIZ do projeto (ex.: public_html/nossocofre/.htaccess)
+# Usa SOMENTE mod_rewrite (categoria FileInfo do AllowOverride), que todo plano compartilhado permite.
+# Tudo é reescrito para dentro de public/, a única pasta realmente servida.
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Arquivos de configuração, banco, logs e documentação nunca são servidos
+    RewriteRule (^|/)\.env - [F,L]
+    RewriteRule (^|/)\.git - [F,L]
+    RewriteRule \.(sql|md|log|lock|ini|bak|dist)$ - [F,L]
+
     # O que já aponta para public/ segue em frente (evita public/public/... e loops)
     RewriteRule ^public/ - [L]
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
-
-# Nunca servir arquivos de configuração, banco, logs ou documentação
-<FilesMatch "^(\.env.*|\.git.*|.*\.(sql|md|log|lock|ini|bak|dist))$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order deny,allow
-        Deny from all
-    </IfModule>
-</FilesMatch>

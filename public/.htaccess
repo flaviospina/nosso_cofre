@@ -1,43 +1,40 @@
 # Nosso Cofre — .htaccess da pasta pública (front controller)
-# Bloqueia listagem de diretório sem usar "Options" (não permitido no AllowOverride do HostGator e causa erro 500)
-IndexIgnore *
-DirectoryIndex index.php
-
+# Usa SOMENTE diretivas da categoria FileInfo (mod_rewrite, mod_headers, AddType).
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # Arquivos e pastas reais (assets, manifest, sw.js) são servidos diretamente
+
+    # Nunca servir arquivos ocultos ou de configuração que caiam aqui por engano
+    RewriteRule (^|/)\.(env|git|htaccess) - [F,L]
+    RewriteRule \.(sql|md|log|lock|ini|bak)$ - [F,L]
+
+    # Raiz da pasta → index.php (não depende de DirectoryIndex)
+    RewriteRule ^$ index.php [L]
+
+    # Arquivos e pastas reais (assets, manifest, sw.js) são servidos diretamente; o resto vai ao roteador
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [L]
 </IfModule>
 
 # Tipos MIME da PWA
-AddType application/manifest+json .webmanifest
-AddType application/javascript .js
-AddType audio/mpeg .mp3
-AddType audio/ogg .ogg
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType application/javascript .js
+    AddType audio/mpeg .mp3
+    AddType audio/ogg .ogg
+</IfModule>
 
 # Cabeçalhos de segurança para arquivos estáticos (o PHP repete os mesmos nas páginas dinâmicas)
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=(), usb=()"
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    # O service worker precisa poder controlar toda a subpasta do app
     <Files "sw.js">
         Header set Service-Worker-Allowed "/"
         Header set Cache-Control "no-cache, must-revalidate"
     </Files>
-    # Assets versionados por ?v=timestamp podem ficar em cache por bastante tempo
     <FilesMatch "\.(css|js|png|svg|ico|woff2?|mp3|ogg)$">
         Header set Cache-Control "public, max-age=604800"
     </FilesMatch>
 </IfModule>
-
-# Nunca servir arquivos ocultos ou de configuração que caiam aqui por engano
-<FilesMatch "^(\.env.*|\.git.*|.*\.(sql|md|log|lock|ini|bak))$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-</FilesMatch>

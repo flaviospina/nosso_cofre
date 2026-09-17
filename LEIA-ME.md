@@ -81,10 +81,14 @@ curl -s "https://itthrive.com.br/cofre/cron/run?token=SEU_CRON_TOKEN" > /dev/nul
 Cada execução grava uma linha em `cron_runs`; a tela `/saude` mostrará a última execução (fase 7).
 
 ### 3.6 Se der "Internal Server Error" (500) logo na primeira página
-1. Erro 500 do **Apache** (página branca em inglês, citando ErrorDocument) quase sempre é uma diretiva do `.htaccess` que o plano compartilhado não aceita. Confira o log em cPanel → **Métricas → Erros** (*Errors*): a linha diz qual diretiva foi rejeitada ("not allowed here").
-2. Teste rápido: renomeie `public_html/cofre/.htaccess` para `.htaccess.off`. Se a página `public/index.php` passar a abrir, o problema é no `.htaccess`; restaure o nome e me envie a linha do log.
-3. Erro 500 do **PHP** (página em português do próprio app ou página branca) fica registrado em `storage/logs/app-AAAA-MM-DD.log` e em `storage/logs/php-error.log`.
-4. A subpasta pode ter qualquer nome (`cofre`, `nossocofre`…): nada é fixo no código, mas o `APP_URL` do `.env` precisa ser exatamente a URL pública (ex.: `https://itthrive.com.br/nossocofre`).
+Erro 500 do **Apache** (página branca em inglês citando *ErrorDocument*) não é o código PHP: ou uma diretiva de `.htaccess` foi rejeitada, ou as permissões de arquivo/pasta não agradam ao suPHP/suEXEC do HostGator. Todos os `.htaccess` do projeto usam somente `mod_rewrite`, `mod_headers` e `AddType` (categoria *FileInfo*), aceitos em qualquer plano. Escada de diagnóstico, do mais simples ao mais fundo:
+1. Abra `https://itthrive.com.br/` (raiz do domínio). Se o site principal também estiver com 500, o `.htaccess` da raiz `public_html/` foi sobrescrito por engano; restaure-o a partir do backup do cPanel.
+2. Abra `.../nossocofre/public/teste.txt` (arquivo estático). Se der 500, o problema é `.htaccess` ou permissão, não PHP.
+3. Permissões (Gerenciador de Arquivos → botão direito → *Change Permissions*): pastas `755`, arquivos `644`. **Nada com 777 ou 775** (pasta gravável por grupo/outros derruba o PHP com 500 no HostGator), inclusive `storage/`, que com `755` já é gravável pelo PHP porque ele roda com o seu usuário.
+4. Renomeie `nossocofre/.htaccess` para `.htaccess.off` e teste `.../nossocofre/public/teste.txt` de novo; depois faça o mesmo com `nossocofre/public/.htaccess`. O arquivo cuja remoção fizer a página abrir é o culpado: me envie a linha correspondente de cPanel → **Métricas → Erros**.
+5. Se `teste.txt` abre mas `.../nossocofre/public/diagnostico.php` dá 500, o problema é o handler de PHP da conta: em cPanel → *MultiPHP Manager* escolha PHP 8.2+ para o domínio e confira em *MultiPHP INI Editor* que `display_errors` está ligado temporariamente para ver a mensagem.
+6. Erro 500 do **PHP** (página em português do próprio app) fica registrado em `storage/logs/app-AAAA-MM-DD.log` e `storage/logs/php-error.log`.
+7. A subpasta pode ter qualquer nome (`cofre`, `nossocofre`…): nada é fixo no código, mas o `APP_URL` do `.env` precisa ser exatamente a URL pública (ex.: `https://itthrive.com.br/nossocofre`).
 
 ### 3.7 Se der "504 Gateway Time-out" (página do nginx)
 O nginx do HostGator fica na frente do Apache; 504 significa que o Apache/PHP não respondeu a tempo. Para achar o ponto:
