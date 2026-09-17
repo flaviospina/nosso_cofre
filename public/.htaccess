@@ -1,5 +1,6 @@
 # Nosso Cofre — .htaccess da pasta pública (front controller)
-Options -Indexes -MultiViews
+# Bloqueia listagem de diretório sem usar "Options" (não permitido no AllowOverride do HostGator e causa erro 500)
+IndexIgnore *
 DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>

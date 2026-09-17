@@ -80,6 +80,12 @@ curl -s "https://itthrive.com.br/cofre/cron/run?token=SEU_CRON_TOKEN" > /dev/nul
 ```
 Cada execução grava uma linha em `cron_runs`; a tela `/saude` mostrará a última execução (fase 7).
 
+### 3.6 Se der "Internal Server Error" (500) logo na primeira página
+1. Erro 500 do **Apache** (página branca em inglês, citando ErrorDocument) quase sempre é uma diretiva do `.htaccess` que o plano compartilhado não aceita. Confira o log em cPanel → **Métricas → Erros** (*Errors*): a linha diz qual diretiva foi rejeitada ("not allowed here").
+2. Teste rápido: renomeie `public_html/cofre/.htaccess` para `.htaccess.off`. Se a página `public/index.php` passar a abrir, o problema é no `.htaccess`; restaure o nome e me envie a linha do log.
+3. Erro 500 do **PHP** (página em português do próprio app ou página branca) fica registrado em `storage/logs/app-AAAA-MM-DD.log` e em `storage/logs/php-error.log`.
+4. A subpasta pode ter qualquer nome (`cofre`, `nossocofre`…): nada é fixo no código, mas o `APP_URL` do `.env` precisa ser exatamente a URL pública (ex.: `https://itthrive.com.br/nossocofre`).
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.

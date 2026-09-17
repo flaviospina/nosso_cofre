@@ -1,7 +1,8 @@
 # Nosso Cofre — .htaccess da RAIZ do projeto
 # Cenário de publicação: o projeto inteiro fica em public_html/cofre/ e a URL é https://itthrive.com.br/cofre
 # Tudo que não começa com "public/" é reescrito para dentro de public/, que é a única pasta realmente servida.
-Options -Indexes -MultiViews
+# Bloqueia listagem de diretório sem usar "Options" (não permitido no AllowOverride do HostGator e causa erro 500)
+IndexIgnore *
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
