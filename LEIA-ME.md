@@ -86,6 +86,14 @@ Cada execução grava uma linha em `cron_runs`; a tela `/saude` mostrará a últ
 3. Erro 500 do **PHP** (página em português do próprio app ou página branca) fica registrado em `storage/logs/app-AAAA-MM-DD.log` e em `storage/logs/php-error.log`.
 4. A subpasta pode ter qualquer nome (`cofre`, `nossocofre`…): nada é fixo no código, mas o `APP_URL` do `.env` precisa ser exatamente a URL pública (ex.: `https://itthrive.com.br/nossocofre`).
 
+### 3.7 Se der "504 Gateway Time-out" (página do nginx)
+O nginx do HostGator fica na frente do Apache; 504 significa que o Apache/PHP não respondeu a tempo. Para achar o ponto:
+1. Abra `https://itthrive.com.br/cofre/public/diagnostico.php` (acesso direto, sem passar pelo roteador). O script imprime passo a passo: PHP, extensões, pastas graváveis, sessão, banco, carga do framework e a resposta interna da rota `/instalar`.
+   - Se **também** der 504: o PHP da conta não está respondendo (troque a versão em cPanel → *MultiPHP Manager* / *Select PHP Version* para 8.2+ e verifique se o handler é php-fpm ou lsapi). Não é o código.
+   - Se parar em uma linha: o travamento está naquele passo (o mais comum é o banco, `DB_HOST` errado).
+   - Se tudo passar e só a URL amigável falhar: é a reescrita do `.htaccess`; me envie a saída e o log de cPanel → *Métricas → Erros*.
+2. O `diagnostico.php` só funciona enquanto `APP_KEY` está vazio ou `APP_DEBUG=true`; apague-o depois.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.

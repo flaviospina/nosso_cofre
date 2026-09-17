@@ -6,7 +6,9 @@ IndexIgnore *
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(?!public/)(.*)$ public/$1 [L]
+    # O que já aponta para public/ segue em frente (evita public/public/... e loops)
+    RewriteRule ^public/ - [L]
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
 # Nunca servir arquivos de configuração, banco, logs ou documentação
