@@ -10,6 +10,7 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\HttpException;
 use App\Core\Logger;
+use App\Core\Migrator;
 use App\Core\Request;
 use App\Core\Response;
 
@@ -80,6 +81,15 @@ final class SystemController extends Controller
             'ok'    => $schemaOk,
             'info'  => $schemaOk ? '' : 'Importe sql/schema.sql no phpMyAdmin',
         ];
+        if ($schemaOk) {
+            $current = Migrator::currentVersion();
+            $target = Migrator::targetVersion();
+            $checks['schema_version'] = [
+                'label' => "Banco na versão {$target} do esquema",
+                'ok'    => $current >= $target,
+                'info'  => $current >= $target ? '' : "Banco na versão {$current}: aplique as migrações em /sistema/migrar?token=SEU_CRON_TOKEN",
+            ];
+        }
         foreach (['logs', 'cache', 'uploads', 'exports', 'backups', 'sessions'] as $dir) {
             $path = (string) Config::get('paths.' . $dir);
             $checks['dir_' . $dir] = [
@@ -137,6 +147,31 @@ final class SystemController extends Controller
             'appKey'    => Crypto::generateKey(),
             'backupKey' => Crypto::generateKey(),
             'cronToken' => Crypto::randomToken(32),
+        ]);
+    }
+
+    /** /sistema/migrar?token=... — lista e aplica migrações pendentes (sem terminal). */
+    public function migrate(): Response
+    {
+        $pending = Migrator::pending();
+        if ($this->request->isMethod('POST')) {
+            $applied = Migrator::migrate();
+            return $this->view('system/migrate', [
+                'title'   => 'Atualização do banco',
+                'pending' => Migrator::pending(),
+                'applied' => $applied,
+                'current' => Migrator::currentVersion(),
+                'target'  => Migrator::targetVersion(),
+                'token'   => (string) $this->request->query('token', ''),
+            ]);
+        }
+        return $this->view('system/migrate', [
+            'title'   => 'Atualização do banco',
+            'pending' => $pending,
+            'applied' => null,
+            'current' => Migrator::currentVersion(),
+            'target'  => Migrator::targetVersion(),
+            'token'   => (string) $this->request->query('token', ''),
         ]);
     }
 

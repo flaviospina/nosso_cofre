@@ -2,7 +2,7 @@
 
 Aplicativo web de controle financeiro individual ou familiar, focado em **economizar**. PHP 8.2 puro (MVC próprio), MySQL/MariaDB, HTML + CSS + JS vanilla (Bootstrap 5 via CDN), PWA instalável. Feito para HostGator compartilhado + cPanel, sem terminal.
 
-Este documento cresce a cada fase. Estado atual: **Fase 1 — Fundação** (núcleo MVC, banco, PWA mínima, telas de sistema).
+Este documento cresce a cada fase. Estado atual: **Fase 2 — Contas e segurança** (cadastro, confirmação de e-mail, login com 2FA, lembrar-me, sessões, auditoria, onboarding, convites e papéis).
 
 ## 1. Requisitos do servidor
 
@@ -109,6 +109,27 @@ O nginx do HostGator fica na frente do Apache; 504 significa que o Apache/PHP n�
    - Se tudo passar e só a URL amigável falhar: é a reescrita do `.htaccess`; me envie a saída e o log de cPanel → *Métricas → Erros*.
 2. O `diagnostico.php` só funciona enquanto `APP_KEY` está vazio ou `APP_DEBUG=true`; apague-o depois.
 
+### 3.8 Atualizando uma instalação existente (migrações)
+Quando uma fase nova altera o banco, o código passa a esperar uma versão maior do esquema e a tela `/saude` avisa. Para atualizar sem terminal:
+1. Envie os arquivos novos (zip) por cima dos antigos.
+2. Abra `https://itthrive.com.br/cofre/sistema/migrar?token=SEU_CRON_TOKEN` (o mesmo `CRON_TOKEN` do `.env`) e clique em **Aplicar migrações**. Os arquivos ficam em `sql/migrations/NNN_nome.sql` e podem, alternativamente, ser importados no phpMyAdmin na ordem numérica.
+3. Confira `/saude`.
+
+Instalações novas não precisam disso: `sql/schema.sql` já está na versão atual.
+
+### 3.9 E-mail (SMTP)
+O sistema envia e-mails de confirmação de cadastro, recuperação de senha, convites e aviso de acesso de aparelho novo. Configure no `.env` a conta criada em cPanel → **Contas de e-mail**: `MAIL_HOST=mail.itthrive.com.br`, `MAIL_PORT=465`, `MAIL_ENCRYPTION=ssl`, `MAIL_USER=cofre@itthrive.com.br`, `MAIL_PASS=...`. O cliente SMTP é próprio (sem PHPMailer). Se o envio falhar, a mensagem fica em `email_outbox` e o cron tenta de novo a cada 5 minutos, até 5 vezes. Em desenvolvimento use `MAIL_DRIVER=log` (grava em `storage/logs/mail-AAAA-MM-DD.log`).
+
+### 3.10 Regras de segurança da conta
+- Senha: mínimo 10 caracteres, letras e números, verificada contra lista local de senhas vazadas comuns.
+- E-mail confirmado obrigatoriamente antes do primeiro acesso (link de 24 h).
+- Após 3 falhas de login no mesmo IP ou conta, aparece um desafio aritmético próprio; a partir de 5 falhas o bloqueio é progressivo (1, 5, 15 e 60 minutos).
+- 2FA (TOTP) opcional para todos e **obrigatório** para responsável e administradores de lar familiar; 10 códigos de recuperação de uso único.
+- "Lembrar-me": cookie com par selector/validator, validator trocado a cada uso, 30 dias; roubo do banco não dá acesso.
+- Login de aparelho ou IP desconhecido gera e-mail de aviso; a tela Conta → Sessões ativas encerra as outras sessões e revoga os acessos lembrados.
+- Troca ou redefinição de senha encerra as demais sessões.
+- Tudo fica no log de auditoria, visível ao próprio usuário em Conta → Minha atividade.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -119,24 +140,30 @@ O nginx do HostGator fica na frente do Apache; 504 significa que o Apache/PHP n�
 - **CSP com nonce** para scripts e estilos: nenhum `<script>` ou `style=""` inline solto nas views. Cores dinâmicas usam `data-bg`, `data-color`, `data-width`, aplicadas pelo `app.js`.
 - **Sessões**: cookie `HttpOnly`, `Secure`, `SameSite=Strict`, restrito ao caminho `/cofre/`; arquivos em `storage/sessions`; expiração por inatividade (configurável) e absoluta (12 h). Na fase 2 as sessões passam para o banco (tela "Sessões ativas").
 - **Logs**: `storage/logs/app-AAAA-MM-DD.log` e `security-AAAA-MM-DD.log`, com retenção de `LOG_RETENTION_DAYS`. Senhas e tokens nunca entram no log.
+- **TOTP em código próprio** (RFC 6238, ~100 linhas com testes contra os vetores oficiais) em vez de biblioteca vendorizada; o QR code é desenhado no navegador pela biblioteca `qrcode-generator` (jsDelivr, com hash SRI), sem enviar o segredo a serviço externo.
+- **Sessões em banco** (tabela `sessions`) para a tela "Sessões ativas"; `SESSION_DRIVER=files` volta para arquivos se necessário.
+- **Aparelho conhecido** = hash(IP + família de navegador/SO), não o user-agent inteiro, para não disparar aviso a cada atualização do navegador.
+- **Convite aceito na confirmação do e-mail**: quem cria conta com o e-mail convidado entra no lar automaticamente ao confirmar, sem passo extra.
+- **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
 
 - **Seção 1 — categorias globais** (ids 1–21 pais, 100+ filhas): modelo pt-BR com `is_essential`. Vale para produção.
-- **Seção 2 — lar de teste "Família Spina"** (usuários `flavio@exemplo.test` e `priscila@exemplo.test`, senha `Cofre@2026teste`): contas, cartões, recorrências, PLR em março, assinaturas (com Amazon Prime duplicado de propósito) e o plano de ação de economia. **Não use em produção**: importe só para testar e depois exclua o lar pela própria aplicação, ou edite o arquivo e remova a seção 2 antes de importar.
+- **Seção 2 — lar de teste "Família Spina"** (usuários `flavio@exemplo.test` e `priscila@exemplo.test`, senha `Cofre@2026teste`, e-mails já confirmados): contas, cartões, recorrências, PLR em março, assinaturas (com Amazon Prime duplicado de propósito) e o plano de ação de economia. Como o lar é familiar, o Flávio (responsável) e a Priscila (administradora) precisam ativar o 2FA no primeiro acesso. **Não use em produção**: importe só para testar e depois exclua o lar pela própria aplicação, ou edite o arquivo e remova a seção 2 antes de importar.
 
 ## 6. Desenvolvimento local
 
 ```
-php tests/run.php                      # testes
+php tests/run.php                      # testes unitários
 php -S 127.0.0.1:8080 tools/dev-server.php   # servidor local (emula o .htaccess)
+bash tools/smoke-fase2.sh              # teste de ponta a ponta da fase 2 (banco limpo + MAIL_DRIVER=log)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
 ## 7. Roadmap das fases
 
-1. ✅ Fundação (esta entrega)
-2. Contas e segurança: cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
+1. ✅ Fundação
+2. ✅ Contas e segurança (esta entrega): cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
 3. LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, retenção
 4. Cadastros financeiros: contas, categorias, lançamentos, parcelas, anexos, importação CSV/OFX
 5. Recorrências, radar de assinaturas, orçamento, metas, plano de ação

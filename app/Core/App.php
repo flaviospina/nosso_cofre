@@ -39,6 +39,7 @@ final class App
             'role'      => Middleware\RoleMiddleware::class,
             'household' => Middleware\HouseholdMiddleware::class,
             'cron'      => Middleware\CronTokenMiddleware::class,
+            '2fa'       => Middleware\TwoFactorRequiredMiddleware::class,
         ]);
         self::$router->setGlobalMiddleware(['csrf']);
 

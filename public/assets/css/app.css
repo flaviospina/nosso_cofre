@@ -82,3 +82,20 @@ html, body { min-height: 100%; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* --- Fase 2: acesso, onboarding, conta --- */
+.nc-choice { cursor: pointer; transition: border-color .15s; }
+.nc-choice:has(input:checked) { border-color: var(--nc-brand); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .15); }
+.nc-steps .nc-step-dot { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 999px; border: 1px solid var(--bs-border-color); font-size: .8rem; }
+.nc-steps .nc-step-dot.current { background: var(--nc-brand); color: #fff; border-color: var(--nc-brand); }
+.nc-steps .nc-step-dot.done { background: var(--nc-income); color: #fff; border-color: var(--nc-income); }
+.nc-pills { white-space: nowrap; }
+.nc-codes { font-size: 1.05rem; letter-spacing: .05em; background: var(--bs-tertiary-bg); padding: .75rem 1rem; border-radius: .5rem; }
+.nc-qr svg { display: block; }
+.nc-legal h1 { font-size: 1.6rem; }
+.nc-legal h2 { font-size: 1.2rem; margin-top: 1.5rem; }
+.nc-legal table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .95rem; }
+.nc-legal th, .nc-legal td { border: 1px solid var(--bs-border-color); padding: .4rem .6rem; vertical-align: top; }
+[data-show-when] { display: none; }
+[data-show-when].is-visible { display: block; }
+.dropdown-item-text { display: block; padding: .25rem 1rem; }

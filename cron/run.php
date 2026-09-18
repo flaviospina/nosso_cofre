@@ -17,8 +17,10 @@ if (!$calledFromWeb) {
     require dirname(__DIR__) . '/app/bootstrap.php';
 }
 
+use App\Core\Config;
 use App\Core\Database;
 use App\Core\Logger;
+use App\Core\Mailer;
 
 $startedAt = microtime(true);
 $lines = [];
@@ -27,9 +29,19 @@ try {
     if (Database::isConfigured() && Database::ping()) {
         Database::execute(
             'INSERT INTO cron_runs (task, started_at, finished_at, status, message) VALUES (?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?, ?)',
-            ['heartbeat', 'ok', 'Fase 1: runner ativo, nenhuma tarefa agendada ainda']
+            ['heartbeat', 'ok', 'Runner ativo: outbox de e-mail e limpeza de sessões/tokens']
         );
         $lines[] = 'heartbeat: ok';
+
+        // Fase 2: e-mails pendentes (falha de SMTP) e limpeza de sessões/tokens expirados
+        $sent = Mailer::flushPending(20);
+        $lines[] = "e-mails reenviados: {$sent}";
+        $absoluteHours = max(1, (int) Config::get('security.session_absolute_hours', 12));
+        $sessions = Database::execute('DELETE FROM sessions WHERE last_activity < ?', [gmdate('Y-m-d H:i:s', time() - $absoluteHours * 3600)]);
+        $tokens = Database::execute('DELETE FROM remember_tokens WHERE expires_at < ?', [gmdate('Y-m-d H:i:s')]);
+        $tokens += Database::execute('DELETE FROM password_resets WHERE expires_at < ? OR used_at IS NOT NULL', [gmdate('Y-m-d H:i:s', time() - 86400)]);
+        $tokens += Database::execute('DELETE FROM email_verifications WHERE expires_at < ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s', time() - 86400)]);
+        $lines[] = "sessões expiradas removidas: {$sessions}; tokens expirados removidos: {$tokens}";
     } else {
         $lines[] = 'heartbeat: banco indisponível';
     }

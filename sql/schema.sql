@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   totp_secret          VARCHAR(255) NULL COMMENT 'segredo TOTP criptografado (Crypto v1)',
   totp_enabled_at      DATETIME NULL,
   totp_recovery_codes  JSON NULL COMMENT 'hashes dos códigos de recuperação',
+  totp_last_counter    BIGINT UNSIGNED NULL COMMENT 'último contador TOTP aceito (anti-reuso)',
   color                CHAR(7) NOT NULL DEFAULT '#0d6efd' COMMENT 'cor do membro em gráficos e badges',
   timezone             VARCHAR(64) NOT NULL DEFAULT 'America/Sao_Paulo',
   locale               VARCHAR(10) NOT NULL DEFAULT 'pt_BR',
@@ -86,6 +87,7 @@ CREATE TABLE IF NOT EXISTS invitations (
   role             ENUM('admin','member','viewer') NOT NULL DEFAULT 'member',
   invited_by       INT UNSIGNED NOT NULL,
   expires_at       DATETIME NOT NULL,
+  sent_count       TINYINT UNSIGNED NOT NULL DEFAULT 1,
   accepted_at      DATETIME NULL,
   accepted_user_id INT UNSIGNED NULL,
   revoked_at       DATETIME NULL,
@@ -240,10 +242,12 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   succeeded  TINYINT(1) NOT NULL DEFAULT 0,
   kind       ENUM('login','register','reset','totp','invite') NOT NULL DEFAULT 'login',
   user_agent VARCHAR(255) NULL,
+  device_hash CHAR(64) NULL COMMENT 'hash(ip + user-agent) para detectar aparelho novo',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_attempts_ip (ip, created_at),
-  KEY idx_attempts_email (email, created_at)
+  KEY idx_attempts_email (email, created_at),
+  KEY idx_attempts_device (email, device_hash, succeeded)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -639,7 +643,7 @@ CREATE TABLE IF NOT EXISTS cron_runs (
 
 -- Prazos de retenção (LGPD) e versão do esquema
 INSERT INTO settings (`key`, `value`, description) VALUES
-  ('schema.version', '1', 'Versão do esquema aplicada'),
+  ('schema.version', '2', 'Versão do esquema aplicada'),
   ('retention.login_attempts_months', '12', 'Meses de retenção de tentativas de login'),
   ('retention.audit_logs_months', '24', 'Meses de retenção do log de auditoria'),
   ('retention.trash_days', '30', 'Dias na lixeira antes da exclusão definitiva'),
@@ -650,4 +654,4 @@ INSERT INTO settings (`key`, `value`, description) VALUES
   ('retention.deletion_grace_days', '7', 'Dias de carência antes da exclusão de conta/lar'),
   ('legal.terms_version', '1.0', 'Versão vigente dos Termos de Uso'),
   ('legal.privacy_version', '1.0', 'Versão vigente da Política de Privacidade')
-ON DUPLICATE KEY UPDATE description = VALUES(description);
+ON DUPLICATE KEY UPDATE description = VALUES(description), `value` = IF(`key` = 'schema.version' AND CAST(`value` AS UNSIGNED) < 2, '2', `value`);

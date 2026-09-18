@@ -123,6 +123,25 @@
         });
     });
 
+    // --- Campos condicionais: data-show-when="campo=valor" ---
+    document.querySelectorAll('[data-show-when]').forEach(function (block) {
+        var rule = block.getAttribute('data-show-when').split('=');
+        var inputs = document.querySelectorAll('[name="' + rule[0] + '"]');
+        var update = function () {
+            var value = null;
+            inputs.forEach(function (i) { if ((i.type !== 'radio' && i.type !== 'checkbox') || i.checked) { value = i.value; } });
+            block.classList.toggle('is-visible', value === rule[1]);
+        };
+        inputs.forEach(function (i) { i.addEventListener('change', update); });
+        update();
+    });
+    // Confirmação antes de enviar formulários destrutivos
+    document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (ev) {
+            if (!window.confirm(form.getAttribute('data-confirm'))) { ev.preventDefault(); }
+        });
+    });
+
     // --- Service worker (PWA) ---
     if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
         window.addEventListener('load', function () {

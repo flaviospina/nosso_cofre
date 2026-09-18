@@ -25,9 +25,14 @@ final class Session
             return;
         }
 
-        $savePath = (string) Config::get('paths.sessions');
-        if (is_dir($savePath) && is_writable($savePath)) {
-            session_save_path($savePath);
+        $useDatabase = (string) Config::get('security.session_driver', 'database') === 'database' && Database::isConfigured();
+        if ($useDatabase) {
+            session_set_save_handler(new DatabaseSessionHandler(), true);
+        } else {
+            $savePath = (string) Config::get('paths.sessions');
+            if (is_dir($savePath) && is_writable($savePath)) {
+                session_save_path($savePath);
+            }
         }
 
         $basePath = (string) Config::get('app.base_path', '');

@@ -25,6 +25,8 @@ return [
         'timezone' => Env::get('APP_TIMEZONE', 'America/Sao_Paulo'),
         'locale'   => 'pt_BR',
         'version'  => '2.0.0',
+        // Versão do esquema de banco que este código espera (sql/migrations)
+        'schema_version' => 2,
     ],
     'db' => [
         'host'    => Env::get('DB_HOST', 'localhost'),
@@ -35,6 +37,8 @@ return [
         'charset' => 'utf8mb4',
     ],
     'mail' => [
+        // smtp (produção) | log (desenvolvimento: grava em storage/logs/mail-*.log) | mail (função mail() do PHP)
+        'driver'       => Env::get('MAIL_DRIVER', 'smtp'),
         'host'         => Env::get('MAIL_HOST', 'localhost'),
         'port'         => (int) Env::get('MAIL_PORT', '465'),
         'encryption'   => Env::get('MAIL_ENCRYPTION', 'ssl'),
@@ -44,6 +48,8 @@ return [
         'from_name'    => Env::get('MAIL_FROM_NAME', 'Nosso Cofre'),
     ],
     'security' => [
+        // database (tela "Sessões ativas") | files
+        'session_driver'         => Env::get('SESSION_DRIVER', 'database'),
         'session_cookie'         => 'nc_session',
         'session_idle_minutes'   => (int) Env::get('SESSION_IDLE_MINUTES', '30'),
         'session_absolute_hours' => (int) Env::get('SESSION_ABSOLUTE_HOURS', '12'),

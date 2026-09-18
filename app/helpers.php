@@ -222,3 +222,29 @@ function initials(string $name): string
     $last = count($parts) > 1 ? mb_substr($parts[count($parts) - 1], 0, 1) : '';
     return mb_strtoupper($first . $last);
 }
+
+/** Primeira mensagem de erro do campo (ou vazio). */
+function error_text(string $field): string
+{
+    $list = errors($field);
+    return $list[0] ?? '';
+}
+
+/** Classe "is-invalid" quando o campo tem erro. */
+function invalid_class(string $field): string
+{
+    return has_error($field) ? ' is-invalid' : '';
+}
+
+/** Bloco <div class="invalid-feedback"> com a primeira mensagem do campo. */
+function field_error(string $field): string
+{
+    $text = error_text($field);
+    return $text === '' ? '' : '<div class="invalid-feedback d-block">' . e($text) . '</div>';
+}
+
+/** Rótulo em pt-BR do papel no lar. */
+function role_label(?string $role): string
+{
+    return \App\Core\Auth::ROLE_LABELS[$role ?? ''] ?? (string) $role;
+}
