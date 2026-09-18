@@ -49,11 +49,18 @@ $hasHousehold = $household !== null;
                     <?php if ($user !== null && $hasHousehold): ?>
                         <li class="nav-item"><a class="nav-link <?= is_route('dashboard') ? 'active' : '' ?>" href="<?= e(route('dashboard')) ?>"><i class="bi bi-speedometer2 me-1" aria-hidden="true"></i>Início</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('transactions.*') ? 'active' : '' ?>" href="<?= e(route('transactions.index')) ?>"><i class="bi bi-receipt me-1" aria-hidden="true"></i>Lançamentos</a></li>
+                        <li class="nav-item"><a class="nav-link <?= is_route('budgets.*') ? 'active' : '' ?>" href="<?= e(route('budgets.index')) ?>"><i class="bi bi-pie-chart me-1" aria-hidden="true"></i>Orçamento</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('accounts.*') ? 'active' : '' ?>" href="<?= e(route('accounts.index')) ?>"><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>Contas</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('family.*') ? 'active' : '' ?>" href="<?= e(route('family.index')) ?>"><i class="bi bi-people me-1" aria-hidden="true"></i><?= ($household['type'] ?? '') === 'family' ? 'Família' : 'Meu lar' ?></a></li>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle <?= is_route('categories.*') || is_route('import.*') ? 'active' : '' ?>" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-grid me-1" aria-hidden="true"></i>Mais</a>
+                            <a class="nav-link dropdown-toggle <?= is_route('categories.*') || is_route('import.*') || is_route('recurrences.*') || is_route('subscriptions.*') || is_route('goals.*') || is_route('savings.*') || is_route('simulator.*') ? 'active' : '' ?>" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-grid me-1" aria-hidden="true"></i>Mais</a>
                             <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="<?= e(route('recurrences.index')) ?>"><i class="bi bi-arrow-repeat me-2" aria-hidden="true"></i>Recorrências</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('subscriptions.index')) ?>"><i class="bi bi-broadcast me-2" aria-hidden="true"></i>Radar de assinaturas</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('goals.index')) ?>"><i class="bi bi-flag me-2" aria-hidden="true"></i>Metas</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('savings.index')) ?>"><i class="bi bi-check2-square me-2" aria-hidden="true"></i>Plano de ação</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('simulator.index')) ?>"><i class="bi bi-calculator me-2" aria-hidden="true"></i>Simulador "e se"</a></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="<?= e(route('categories.index')) ?>"><i class="bi bi-tags me-2" aria-hidden="true"></i>Categorias</a></li>
                                 <li><a class="dropdown-item" href="<?= e(route('import.index')) ?>"><i class="bi bi-file-earmark-arrow-up me-2" aria-hidden="true"></i>Importar extrato</a></li>
                                 <li><a class="dropdown-item" href="<?= e(route('transactions.templates')) ?>"><i class="bi bi-star me-2" aria-hidden="true"></i>Modelos favoritos</a></li>

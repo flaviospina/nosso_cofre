@@ -13,6 +13,12 @@ use App\Controllers\FamilyController;
 use App\Controllers\FinancialAccountController;
 use App\Controllers\HomeController;
 use App\Controllers\ImportController;
+use App\Controllers\RecurrenceController;
+use App\Controllers\SubscriptionController;
+use App\Controllers\BudgetController;
+use App\Controllers\GoalController;
+use App\Controllers\SavingsActionController;
+use App\Controllers\SimulatorController;
 use App\Controllers\InvitationController;
 use App\Controllers\LegalController;
 use App\Controllers\OnboardingController;
@@ -163,5 +169,44 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/importar/{key}/mapear', [ImportController::class, 'preview'], 'import.map');
         $r->post('/importar/{key}/confirmar', [ImportController::class, 'confirm'], 'import.confirm');
         $r->post('/importar/lotes/{id:\d+}/desfazer', [ImportController::class, 'undo'], 'import.undo');
+
+        // Fase 5: recorrências, radar de assinaturas, orçamento, metas, plano de ação, simulador
+        $r->get('/recorrencias', [RecurrenceController::class, 'index'], 'recurrences.index');
+        $r->get('/recorrencias/nova', [RecurrenceController::class, 'create'], 'recurrences.create');
+        $r->post('/recorrencias/nova', [RecurrenceController::class, 'store'], 'recurrences.store');
+        $r->post('/recorrencias/gerar', [RecurrenceController::class, 'generate'], 'recurrences.generate');
+        $r->post('/recorrencias/ocorrencias/{id:\d+}/confirmar', [RecurrenceController::class, 'confirm'], 'recurrences.confirm');
+        $r->post('/recorrencias/ocorrencias/{id:\d+}/pular', [RecurrenceController::class, 'skip'], 'recurrences.skip');
+        $r->get('/recorrencias/{id:\d+}/editar', [RecurrenceController::class, 'edit'], 'recurrences.edit');
+        $r->post('/recorrencias/{id:\d+}/editar', [RecurrenceController::class, 'update'], 'recurrences.update');
+        $r->post('/recorrencias/{id:\d+}/pausar', [RecurrenceController::class, 'toggle'], 'recurrences.toggle');
+        $r->post('/recorrencias/{id:\d+}/debito-automatico', [RecurrenceController::class, 'autoDebit'], 'recurrences.auto_debit');
+        $r->post('/recorrencias/{id:\d+}/excluir', [RecurrenceController::class, 'destroy'], 'recurrences.destroy');
+
+        $r->get('/assinaturas', [SubscriptionController::class, 'index'], 'subscriptions.index');
+        $r->post('/assinaturas/detectada', [SubscriptionController::class, 'adopt'], 'subscriptions.adopt');
+        $r->post('/assinaturas/{id:\d+}/usei', [SubscriptionController::class, 'usage'], 'subscriptions.usage');
+        $r->post('/assinaturas/{id:\d+}/cancelar', [SubscriptionController::class, 'cancel'], 'subscriptions.cancel');
+
+        $r->get('/orcamento', [BudgetController::class, 'index'], 'budgets.index');
+        $r->post('/orcamento', [BudgetController::class, 'store'], 'budgets.store');
+        $r->post('/orcamento/copiar', [BudgetController::class, 'copy'], 'budgets.copy');
+        $r->post('/orcamento/{id:\d+}/editar', [BudgetController::class, 'update'], 'budgets.update');
+        $r->post('/orcamento/{id:\d+}/excluir', [BudgetController::class, 'destroy'], 'budgets.destroy');
+
+        $r->get('/metas', [GoalController::class, 'index'], 'goals.index');
+        $r->post('/metas', [GoalController::class, 'store'], 'goals.store');
+        $r->post('/metas/{id:\d+}/editar', [GoalController::class, 'update'], 'goals.update');
+        $r->post('/metas/{id:\d+}/aporte', [GoalController::class, 'contribute'], 'goals.contribute');
+        $r->post('/metas/{id:\d+}/arquivar', [GoalController::class, 'toggle'], 'goals.toggle');
+        $r->post('/metas/{id:\d+}/excluir', [GoalController::class, 'destroy'], 'goals.destroy');
+
+        $r->get('/plano', [SavingsActionController::class, 'index'], 'savings.index');
+        $r->post('/plano', [SavingsActionController::class, 'store'], 'savings.store');
+        $r->post('/plano/{id:\d+}/editar', [SavingsActionController::class, 'update'], 'savings.update');
+        $r->post('/plano/{id:\d+}/situacao', [SavingsActionController::class, 'status'], 'savings.status');
+        $r->post('/plano/{id:\d+}/excluir', [SavingsActionController::class, 'destroy'], 'savings.destroy');
+
+        $r->get('/simulador', [SimulatorController::class, 'index'], 'simulator.index');
     });
 });

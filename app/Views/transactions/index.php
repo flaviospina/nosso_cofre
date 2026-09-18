@@ -125,6 +125,7 @@ $hasFilters = $filters['member'] !== '' || $filters['account'] || $filters['cate
                             <?php if ((int) $t['is_private'] === 1 && !$masked): ?><i class="bi bi-lock-fill small text-body-secondary" title="Privado (só você vê a descrição)" aria-label="Privado"></i><?php endif; ?>
                             <?php if (!empty($t['attachment_path'])): ?><a class="text-body-secondary" href="<?= e(route('transactions.attachment', ['id' => $t['id']])) ?>" title="Comprovante" aria-label="Comprovante"><i class="bi bi-paperclip" aria-hidden="true"></i></a><?php endif; ?>
                             <?php if ((int) $t['auto_debit'] === 1): ?><span class="badge text-bg-light border small" title="Débito automático">auto</span><?php endif; ?>
+                            <?php if ($t['recurring_id'] !== null): ?><i class="bi bi-arrow-repeat small text-body-secondary" title="Gerado por recorrência" aria-label="Recorrente"></i><?php endif; ?>
                         </div>
                         <div class="small text-body-secondary text-truncate">
                             <?= e($isTransfer ? $t['account_name'] . ' → ' . ($t['transfer_account_name'] ?? '?') : ($cat['full_name'] ?? 'Sem categoria') . ' · ' . $t['account_name']) ?>

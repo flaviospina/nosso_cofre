@@ -309,6 +309,80 @@
         kindSelect.addEventListener('change', syncParents); syncParents();
     }
 
+    // --- Fase 5: modais de edição (orçamento, meta, ação), recorrência, simulador ---
+    // Modal reutilizado para "novo" e "editar": data-edit-* traz o JSON; data-new-* limpa. Campos data-only-new somem na edição.
+    var wireEditModal = function (formSelector, editAttr, newAttr, fill) {
+        var form = document.querySelector(formSelector);
+        if (!form) { return; }
+        var title = form.querySelector('[data-modal-title]');
+        var titleNew = title ? title.textContent : '';
+        var setMode = function (editing, id) {
+            form.setAttribute('action', editing ? form.getAttribute('data-update-template').replace(/0(\/editar)$/, id + '$1') : form.getAttribute('data-store-url'));
+            form.querySelectorAll('[data-only-new]').forEach(function (el) {
+                el.classList.toggle('d-none', editing);
+                el.querySelectorAll('select, input').forEach(function (i) { i.disabled = editing; });
+            });
+            if (title) { title.textContent = editing ? titleNew.replace(/^Nov[oa]/, 'Editar') : titleNew; }
+        };
+        document.querySelectorAll('[' + editAttr + ']').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var data = JSON.parse(btn.getAttribute(editAttr));
+                setMode(true, data.id);
+                fill(form, data);
+            });
+        });
+        document.querySelectorAll('[' + newAttr + ']').forEach(function (btn) {
+            btn.addEventListener('click', function () { setMode(false, 0); form.reset(); });
+        });
+    };
+    var setVal = function (form, name, value) { var el = form.querySelector('[name="' + name + '"]'); if (el) { el.value = value === null || value === undefined ? '' : value; } };
+    wireEditModal('[data-budget-form]', 'data-edit-budget', 'data-new-budget', function (form, d) { setVal(form, 'limit_amount', d.limit); setVal(form, 'warn_at', d.warn); });
+    wireEditModal('[data-goal-form]', 'data-edit-goal', 'data-new-goal', function (form, d) {
+        setVal(form, 'name', d.name); setVal(form, 'target_amount', d.target); setVal(form, 'deadline', d.deadline);
+        setVal(form, 'linked_account_id', d.account); setVal(form, 'user_id', d.user); setVal(form, 'color', d.color); setVal(form, 'icon', d.icon);
+    });
+    wireEditModal('[data-action-form]', 'data-edit-action', 'data-new-action', function (form, d) {
+        setVal(form, 'title', d.title); setVal(form, 'description', d.description); setVal(form, 'responsible_user_id', d.responsible);
+        setVal(form, 'category_id', d.category); setVal(form, 'estimated_saving_month', d.estimated);
+    });
+    // Orçamento: botão "usar a média dos 3 meses" conforme a categoria escolhida
+    var budgetCategory = document.querySelector('[data-budget-category]');
+    var useAverage = document.querySelector('[data-use-average]');
+    if (budgetCategory && useAverage) {
+        var syncAverage = function () {
+            var opt = budgetCategory.options[budgetCategory.selectedIndex];
+            var avg = opt ? opt.getAttribute('data-avg') : '';
+            useAverage.hidden = !avg;
+            useAverage.textContent = avg ? 'Usar a média dos 3 meses (R$ ' + avg + ')' : '';
+        };
+        budgetCategory.addEventListener('change', syncAverage); syncAverage();
+        useAverage.addEventListener('click', function () {
+            var opt = budgetCategory.options[budgetCategory.selectedIndex];
+            var limit = document.getElementById('b_limit');
+            if (opt && limit) { limit.value = opt.getAttribute('data-avg'); }
+        });
+    }
+    // Recorrência: campos espelho (dia do mês da anual, N dias do personalizado) e categoria filtrada pelo tipo
+    document.querySelectorAll('[data-mirror]').forEach(function (input) {
+        var target = document.querySelector('[name="' + input.getAttribute('data-mirror') + '"]');
+        if (!target) { return; }
+        input.addEventListener('input', function () { target.value = input.value; });
+    });
+    var recForm = document.querySelector('[data-recurrence-form]');
+    if (recForm) {
+        var kindInputs = recForm.querySelectorAll('input[name="kind"]');
+        var catSelect = recForm.querySelector('[data-kind-filter]');
+        var syncKind = function () {
+            var kind = 'expense'; kindInputs.forEach(function (i) { if (i.checked) { kind = i.value; } });
+            catSelect.querySelectorAll('option[data-kind]').forEach(function (o) {
+                var on = o.getAttribute('data-kind') === kind;
+                o.hidden = !on; o.disabled = !on;
+                if (!on && o.selected) { catSelect.value = ''; }
+            });
+        };
+        kindInputs.forEach(function (i) { i.addEventListener('change', syncKind); }); syncKind();
+    }
+
     // --- Service worker (PWA) ---
     if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
         window.addEventListener('load', function () {

@@ -154,6 +154,17 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Permissões**: `viewer` só lê; `member` cria e edita os próprios (ou de todos, se em Família → *Membros podem editar lançamentos dos outros*); `admin`/`owner` editam tudo, exceto lançamentos privados de outros membros.
 - **Limite de upload no PHP**: os formulários aceitam 5 MB (comprovante) e 2 MB (extrato). Se o cPanel estiver com `upload_max_filesize` menor (padrão 2M em alguns planos), ajuste em *Select PHP Version → Options* (ou `MultiPHP INI Editor`) para 8M/`post_max_size` 10M.
 
+### 3.14 Recorrências, radar, orçamento, metas e plano (fase 5)
+- **Recorrências** (`/recorrencias`): semanal, mensal (dia do mês, a cada N meses), anual (mês + dia) e "a cada N dias". Cada regra vira lançamentos **agendados** com a antecedência configurada (padrão 30 dias). A geração é idempotente e roda ao abrir a tela, no botão *Gerar agora* e a cada execução do cron (`RecurrenceService::generateAll`). Ocorrências vencidas ou dos próximos 7 dias aparecem em *A confirmar*: **Paguei/Recebi** (marca paga na data de hoje), *Ajustar valor* (abre o lançamento) ou *Pular* (lixeira). Valor "média dos últimos 3 meses" usa as 3 últimas ocorrências pagas da própria regra. Editar ou pausar uma regra refaz as ocorrências futuras ainda não confirmadas; as pagas ficam no histórico.
+- **Eventos previstos** (regra com "evento previsto grande", ex.: PLR em março): aparecem no topo com a data e a **sugestão de destino** (dívida mais cara → reserva de emergência → demais metas). O aviso antecipado (`notify_days_before`) é disparado pela fase 7. Ao confirmar, o campo *Valor real* é obrigatório.
+- **Débito automático**: botão-raio em cada regra de despesa e indicador "% em débito automático" por responsável.
+- **Radar de assinaturas** (`/assinaturas`): regras marcadas como assinatura + cobranças repetidas detectadas nos lançamentos (mesma descrição normalizada em ≥ 3 dos últimos 6 meses, valor variando até 10 %). Sinaliza **duplicidade** (mesmo nome em mais de uma regra ativa), **aumento de preço** (> 5 % sobre o anterior/esperado) e **sem uso registrado** (60 dias sem tocar em *Usei*). *Cancelei* encerra a regra e remove as cobranças futuras; *É assinatura* adota uma cobrança detectada como regra.
+- **Orçamento** (`/orcamento?mes=AAAA-MM`): limite por categoria (a categoria pai soma as filhas) e opcionalmente por membro; gasto = pagos + pendentes do mês (agendados não contam); percentual, sobra por dia, **projeção** pelo ritmo diário e "neste ritmo você estoura no dia X"; avisos em X % (padrão 80) e 100 %. *Copiar do mês anterior* e sugestão pela média dos 3 meses. Ao lado, **essencial × supérfluo** (categorias `is_essential`) e a **regra 50/30/20** com semáforo (verde dentro; amarelo até 60/40/10; vermelho fora).
+- **Metas** (`/metas`): valor, prazo, opcionalmente ligada a uma conta (usa o saldo dela) ou alimentada por **aportes** (`goal_contributions`, negativo = retirada). Sugestão de aporte = faltante ÷ meses até o prazo. Ao atingir o alvo a meta vira "batida" (auditoria `goal.achieved`; a notificação chega na fase 7).
+- **Plano de ação** (`/plano`): ações com responsável, categoria de medição e economia estimada. *Iniciar* congela a linha de base (média dos 3 meses anteriores na categoria); *realizada* = base − gasto do mês atual. *Concluir* grava a economia medida.
+- **Simulador "e se"** (`/simulador`): cortes por categoria (limitados à média atual) e cancelamento de assinaturas → sobra mensal nova, economia acumulada em 6/12 meses, meses de reserva cobertos (reserva = saldo de poupança + investimentos ÷ gastos essenciais) e impacto na primeira meta ativa.
+- **Migração**: instalações anteriores à fase 5 precisam da `sql/migrations/003_fase5_aportes_de_meta.sql` (tabela `goal_contributions`), aplicada por `/sistema/migrar?token=CRON_TOKEN` ou pelo phpMyAdmin.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -175,6 +186,10 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Duplicidade na importação por hash** `sha256(data|valor|tipo|descrição normalizada)` gravado em `transactions.import_hash` (também nos lançamentos manuais), além do `FITID` do OFX guardado em `tags.fitid`.
 - **Categorias globais compartilhadas** (`household_id NULL`) com ocultação por lar em `households.settings.hidden_categories`, em vez de copiar 120 categorias para cada lar: o modelo pode evoluir no seed sem migração de dados.
 - **Formulário sem dependências**: seletor de categorias em "chips" (rádios estilizados) filtrável por texto, valor em pt-BR (`1.234,56`) aceito pelo `Validator` e formatado no `blur` pelo `app.js`; o lançamento rápido cabe em três toques (tipo já vem escolhido pelo botão do painel, valor, categoria, salvar).
+- **Ocorrências geradas são lançamentos comuns** (`status = scheduled`, `recurring_id`), não uma tabela à parte: entram na lista, nos filtros, nos saldos projetados e na lixeira sem código especial; a idempotência é garantida pela chave lógica (regra, data).
+- **Cursor `next_run_date` recalculado pela própria regra** a cada geração (não confia no valor gravado), o que torna edições de dia/frequência seguras.
+- **Radar sem tabela própria**: assinaturas são regras com `is_subscription`; a detecção nos lançamentos é calculada na hora (últimos 6 meses) porque o volume por lar é pequeno e evita sincronizar duas fontes.
+- **Orçamento mede pagos + pendentes**: o pendente já é compromisso do mês; o agendado (gerado por recorrência) não entra para não "estourar" orçamentos antes do gasto acontecer.
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
@@ -190,6 +205,7 @@ php -S 127.0.0.1:8080 tools/dev-server.php   # servidor local (emula o .htaccess
 bash tools/smoke-fase2.sh              # teste de ponta a ponta da fase 2 (banco limpo + MAIL_DRIVER=log)
 bash tools/smoke-fase3.sh              # teste de ponta a ponta da fase 3 (depois do da fase 2; ADMIN_EMAILS=ana@exemplo.test)
 bash tools/smoke-fase4.sh              # teste de ponta a ponta da fase 4 (banco limpo com seed; usa o lar "Família Spina")
+bash tools/smoke-fase5.sh              # teste de ponta a ponta da fase 5 (banco limpo com seed)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
@@ -198,8 +214,8 @@ Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://12
 1. ✅ Fundação
 2. ✅ Contas e segurança: cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
 3. ✅ LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
-4. ✅ Cadastros financeiros (esta entrega): contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
-5. Recorrências, radar de assinaturas, orçamento, metas, plano de ação
+4. ✅ Cadastros financeiros: contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
+5. ✅ Recorrências, radar de assinaturas, orçamento (projeção, essencial × supérfluo, 50/30/20), metas com aportes, plano de ação (estimado × realizado) e simulador "e se" (esta entrega)
 6. Dashboard, relatórios, exportações
 7. Notificações: configuração, PWA/Web Push, sons e cores, scheduler, central, cron, backup
 8. Testes, revisão final de segurança/LGPD, polimento mobile

@@ -43,6 +43,10 @@ try {
         $tokens += Database::execute('DELETE FROM email_verifications WHERE expires_at < ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s', time() - 86400)]);
         $lines[] = "sessões expiradas removidas: {$sessions}; tokens expirados removidos: {$tokens}";
 
+        // Fase 5: ocorrências agendadas das recorrências (idempotente; roda a cada execução)
+        $rec = \App\Services\RecurrenceService::generateAll();
+        $lines[] = "recorrências: {$rec['criados']} ocorrência(s) gerada(s) em {$rec['lares']} lar(es)";
+
         // Fase 3: retenção LGPD (uma vez por hora basta) e exclusões agendadas
         $lastRetention = Database::scalar("SELECT MAX(started_at) FROM cron_runs WHERE task = 'retention'");
         if ($lastRetention === null || strtotime((string) $lastRetention . ' UTC') < time() - 3600) {

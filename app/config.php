@@ -26,7 +26,7 @@ return [
         'locale'   => 'pt_BR',
         'version'  => '2.0.0',
         // Versão do esquema de banco que este código espera (sql/migrations)
-        'schema_version' => 2,
+        'schema_version' => 3,
     ],
     'db' => [
         'host'    => Env::get('DB_HOST', 'localhost'),

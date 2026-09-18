@@ -514,6 +514,26 @@ CREATE TABLE IF NOT EXISTS goals (
   CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Aportes em metas (histórico de quem guardou quanto e quando)
+CREATE TABLE IF NOT EXISTS goal_contributions (
+  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  household_id   INT UNSIGNED NOT NULL,
+  goal_id        INT UNSIGNED NOT NULL,
+  user_id        INT UNSIGNED NULL,
+  amount         DECIMAL(12,2) NOT NULL COMMENT 'negativo = retirada',
+  date           DATE NOT NULL,
+  note           VARCHAR(190) NULL,
+  transaction_id BIGINT UNSIGNED NULL COMMENT 'transferência ligada ao aporte, quando houver',
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_contrib_goal (goal_id, date),
+  KEY idx_contrib_household (household_id),
+  CONSTRAINT fk_contrib_household FOREIGN KEY (household_id) REFERENCES households (id) ON DELETE CASCADE,
+  CONSTRAINT fk_contrib_goal FOREIGN KEY (goal_id) REFERENCES goals (id) ON DELETE CASCADE,
+  CONSTRAINT fk_contrib_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_contrib_transaction FOREIGN KEY (transaction_id) REFERENCES transactions (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS savings_actions (
   id                     INT UNSIGNED NOT NULL AUTO_INCREMENT,
   household_id           INT UNSIGNED NOT NULL,
@@ -643,7 +663,7 @@ CREATE TABLE IF NOT EXISTS cron_runs (
 
 -- Prazos de retenção (LGPD) e versão do esquema
 INSERT INTO settings (`key`, `value`, description) VALUES
-  ('schema.version', '2', 'Versão do esquema aplicada'),
+  ('schema.version', '3', 'Versão do esquema aplicada'),
   ('retention.login_attempts_months', '12', 'Meses de retenção de tentativas de login'),
   ('retention.audit_logs_months', '24', 'Meses de retenção do log de auditoria'),
   ('retention.trash_days', '30', 'Dias na lixeira antes da exclusão definitiva'),
@@ -654,4 +674,4 @@ INSERT INTO settings (`key`, `value`, description) VALUES
   ('retention.deletion_grace_days', '7', 'Dias de carência antes da exclusão de conta/lar'),
   ('legal.terms_version', '1.0', 'Versão vigente dos Termos de Uso'),
   ('legal.privacy_version', '1.0', 'Versão vigente da Política de Privacidade')
-ON DUPLICATE KEY UPDATE description = VALUES(description), `value` = IF(`key` = 'schema.version' AND CAST(`value` AS UNSIGNED) < 2, '2', `value`);
+ON DUPLICATE KEY UPDATE description = VALUES(description), `value` = IF(`key` = 'schema.version' AND CAST(`value` AS UNSIGNED) < 3, '3', `value`);
