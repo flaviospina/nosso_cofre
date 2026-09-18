@@ -89,3 +89,15 @@ function test_request_falls_back_to_script_name_when_app_url_mismatches(): void
     assert_same('/saude', $req->path());
     Config::set('app.base_path', '/cofre');
 }
+
+function test_base_path_from_server_variants(): void
+{
+    // DOCUMENT_ROOT + SCRIPT_FILENAME (handler real)
+    assert_same('/nossocofre', Request::basePathFromServer(['DOCUMENT_ROOT' => '/home1/u/public_html', 'SCRIPT_FILENAME' => '/home1/u/public_html/nossocofre/index.php', 'SCRIPT_NAME' => '/nossocofre/index.php']));
+    assert_same('/nossocofre', Request::basePathFromServer(['DOCUMENT_ROOT' => '/home1/u/public_html', 'SCRIPT_FILENAME' => '/home1/u/public_html/nossocofre/public/index.php']));
+    // Sem DOCUMENT_ROOT: sufixo do diretorio x URI
+    assert_same('/nossocofre', Request::basePathFromServer(['SCRIPT_FILENAME' => '/var/www/html/nossocofre/index.php', 'REQUEST_URI' => '/nossocofre/instalar?x=1', 'SCRIPT_NAME' => '/var/www/html/nossocofre/index.php']));
+    assert_same('', Request::basePathFromServer(['SCRIPT_FILENAME' => '/var/www/html/index.php', 'REQUEST_URI' => '/instalar', 'SCRIPT_NAME' => '/index.php']));
+    // Raiz do dominio
+    assert_same('', Request::basePathFromServer(['DOCUMENT_ROOT' => '/home1/u/public_html', 'SCRIPT_FILENAME' => '/home1/u/public_html/index.php', 'SCRIPT_NAME' => '/index.php']));
+}

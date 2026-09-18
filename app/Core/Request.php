@@ -108,6 +108,21 @@ final class Request
         if ($docroot !== '' && $filename !== '' && str_starts_with($filename, $docroot . '/')) {
             return self::basePathFromScript(substr($filename, strlen($docroot)));
         }
+        // Sem DOCUMENT_ROOT confiavel: casa o fim do diretorio do script com os segmentos iniciais da URI
+        $uri = (string) parse_url((string) ($server['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+        $dir = rtrim(str_replace('\\', '/', dirname($filename)), '/');
+        if (str_ends_with($dir, '/public')) {
+            $dir = substr($dir, 0, -7);
+        }
+        if ($dir !== '' && $uri !== '') {
+            $segments = array_values(array_filter(explode('/', trim($uri, '/')), static fn(string $s): bool => $s !== ''));
+            for ($n = count($segments); $n >= 1; $n--) {
+                $candidate = '/' . implode('/', array_slice($segments, 0, $n));
+                if (str_ends_with($dir, $candidate)) {
+                    return $candidate;
+                }
+            }
+        }
         return self::basePathFromScript((string) ($server['SCRIPT_NAME'] ?? ''));
     }
 
@@ -222,6 +237,12 @@ final class Request
             return $this->server['CONTENT_TYPE'] ?? $default;
         }
         return $default;
+    }
+
+    /** @return array<string,string> */
+    public function serverAll(): array
+    {
+        return $this->server;
     }
 
     public function server(string $key, ?string $default = null): ?string
