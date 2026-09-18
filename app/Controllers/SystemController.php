@@ -10,6 +10,7 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\HttpException;
 use App\Core\Logger;
+use App\Core\Request;
 use App\Core\Response;
 
 /**
@@ -53,6 +54,13 @@ final class SystemController extends Controller
             'label' => 'APP_URL configurado com https',
             'ok'    => str_starts_with((string) Config::get('app.url', ''), 'https://'),
             'info'  => '',
+        ];
+        $expectedUrl = ($this->request->isSecure() ? 'https://' : 'http://') . (string) $this->request->header('Host', '')
+            . Request::basePathFromServer($this->request->serverAll());
+        $checks['app_url_match'] = [
+            'label' => 'APP_URL corresponde à URL por onde o app é acessado',
+            'ok'    => !$this->request->appUrlMismatch(),
+            'info'  => 'Pelo acesso atual, o valor esperado é APP_URL=' . $expectedUrl,
         ];
         $checks['db'] = [
             'label' => 'Conexão com o banco de dados',

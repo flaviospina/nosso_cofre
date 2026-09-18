@@ -70,13 +70,10 @@ final class Request
         $uri = (string) parse_url($this->server['REQUEST_URI'] ?? '/', PHP_URL_PATH);
         $uri = rawurldecode($uri);
         $base = (string) Config::get('app.base_path', '');
-        if ($base === '') {
-            // Sem APP_URL configurado: deduz a subpasta pelo caminho do index.php
-            $script = $this->server['SCRIPT_NAME'] ?? '';
-            $base = rtrim(str_replace('\\', '/', dirname($script)), '/');
-            if (str_ends_with($base, '/public')) {
-                $base = substr($base, 0, -7);
-            }
+        // Sem APP_URL, ou com APP_URL que nao corresponde a URL acessada (ex.: .env ainda com a subpasta antiga):
+        // deduz a subpasta pelo caminho do index.php, para o app continuar respondendo.
+        if ($base === '' || !($uri === $base || str_starts_with($uri, $base . '/'))) {
+            $base = self::basePathFromServer($this->server);
         }
         if ($base !== '' && str_starts_with($uri, $base)) {
             $uri = substr($uri, strlen($base));
@@ -87,6 +84,42 @@ final class Request
         }
         $uri = '/' . trim($uri, '/');
         return $uri === '' ? '/' : $uri;
+    }
+
+    /** Subpasta deduzida do SCRIPT_NAME ("/cofre/public/index.php" ou "/cofre/index.php" → "/cofre"). */
+    public static function basePathFromScript(string $script): string
+    {
+        $base = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        if (str_ends_with($base, '/public')) {
+            $base = substr($base, 0, -7);
+        }
+        return $base === '/' ? '' : $base;
+    }
+
+    /**
+     * Subpasta real do app a partir das variaveis do servidor. Prefere SCRIPT_FILENAME relativo ao
+     * DOCUMENT_ROOT (confiavel em todos os handlers de PHP) e cai para SCRIPT_NAME.
+     * @param array<string,string> $server
+     */
+    public static function basePathFromServer(array $server): string
+    {
+        $filename = str_replace('\\', '/', (string) ($server['SCRIPT_FILENAME'] ?? ''));
+        $docroot = rtrim(str_replace('\\', '/', (string) ($server['DOCUMENT_ROOT'] ?? '')), '/');
+        if ($docroot !== '' && $filename !== '' && str_starts_with($filename, $docroot . '/')) {
+            return self::basePathFromScript(substr($filename, strlen($docroot)));
+        }
+        return self::basePathFromScript((string) ($server['SCRIPT_NAME'] ?? ''));
+    }
+
+    /** True quando o APP_URL do .env nao corresponde a URL por onde o app esta sendo acessado. */
+    public function appUrlMismatch(): bool
+    {
+        $configured = (string) Config::get('app.base_path', '');
+        $actual = self::basePathFromServer($this->server);
+        $host = strtolower((string) parse_url((string) Config::get('app.url', ''), PHP_URL_HOST));
+        $actualHost = strtolower((string) ($this->server['HTTP_HOST'] ?? ''));
+        $actualHost = (string) preg_replace('/:\\d+$/', '', $actualHost);
+        return $configured !== $actual || ($host !== '' && $actualHost !== '' && $host !== $actualHost);
     }
 
     public function method(): string

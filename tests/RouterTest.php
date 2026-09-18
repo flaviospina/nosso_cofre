@@ -71,3 +71,21 @@ function test_request_ip_ignores_forwarded_from_untrusted_proxy(): void
     assert_same('10.0.0.1', $req->ip());
     Config::set('security.trusted_proxies', []);
 }
+
+function test_request_falls_back_to_script_name_when_app_url_mismatches(): void
+{
+    // .env ainda com /cofre, mas o app foi publicado em /nossocofre (layout B: index.php direto na pasta)
+    Config::set('app.base_path', '/cofre');
+    $req = new Request([], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/nossocofre/instalar', 'SCRIPT_NAME' => '/nossocofre/index.php'], []);
+    assert_same('/instalar', $req->path());
+    assert_true($req->appUrlMismatch());
+    // Layout A (index.php em /nossocofre/public/) tambem
+    $req = new Request([], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/nossocofre/', 'SCRIPT_NAME' => '/nossocofre/public/index.php'], []);
+    assert_same('/', $req->path());
+    Config::set('app.base_path', '/nossocofre');
+    Config::set('app.url', 'https://itthrive.com.br/nossocofre');
+    $req = new Request([], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/nossocofre/saude', 'SCRIPT_NAME' => '/nossocofre/index.php', 'HTTP_HOST' => 'itthrive.com.br'], []);
+    assert_false($req->appUrlMismatch());
+    assert_same('/saude', $req->path());
+    Config::set('app.base_path', '/cofre');
+}
