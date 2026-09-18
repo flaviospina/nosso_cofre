@@ -7,6 +7,7 @@ $items = [
     'account.two_factor' => ['2FA', 'shield-lock'],
     'account.sessions'   => ['Sessões', 'phone'],
     'account.activity'   => ['Atividade', 'clock-history'],
+    'privacy.index'      => ['Privacidade', 'shield-check'],
 ];
 ?>
 <ul class="nav nav-pills flex-nowrap overflow-auto mb-3 nc-pills">

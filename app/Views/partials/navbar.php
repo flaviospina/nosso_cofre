@@ -27,6 +27,10 @@ $hasHousehold = $household !== null;
                             <li><a class="dropdown-item" href="<?= e(route('account.two_factor')) ?>"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Verificação em duas etapas</a></li>
                             <li><a class="dropdown-item" href="<?= e(route('account.sessions')) ?>"><i class="bi bi-phone me-2" aria-hidden="true"></i>Sessões ativas</a></li>
                             <li><a class="dropdown-item" href="<?= e(route('account.activity')) ?>"><i class="bi bi-clock-history me-2" aria-hidden="true"></i>Minha atividade</a></li>
+                            <li><a class="dropdown-item" href="<?= e(route('privacy.index')) ?>"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Privacidade e seus dados</a></li>
+                            <?php if (\App\Core\Middleware\AdminMiddleware::isAdmin()): ?>
+                                <li><a class="dropdown-item" href="<?= e(route('admin.incidents')) ?>"><i class="bi bi-shield-exclamation me-2" aria-hidden="true"></i>Incidentes (controlador)</a></li>
+                            <?php endif; ?>
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="post" action="<?= e(route('auth.logout')) ?>"><?= csrf_field() ?>

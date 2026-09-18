@@ -2,7 +2,7 @@
 
 Aplicativo web de controle financeiro individual ou familiar, focado em **economizar**. PHP 8.2 puro (MVC próprio), MySQL/MariaDB, HTML + CSS + JS vanilla (Bootstrap 5 via CDN), PWA instalável. Feito para HostGator compartilhado + cPanel, sem terminal.
 
-Este documento cresce a cada fase. Estado atual: **Fase 2 — Contas e segurança** (cadastro, confirmação de e-mail, login com 2FA, lembrar-me, sessões, auditoria, onboarding, convites e papéis).
+Este documento cresce a cada fase. Estado atual: **Fase 3 — LGPD** (consentimentos, área "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção).
 
 ## 1. Requisitos do servidor
 
@@ -130,6 +130,20 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - Troca ou redefinição de senha encerra as demais sessões.
 - Tudo fica no log de auditoria, visível ao próprio usuário em Conta → Minha atividade.
 
+### 3.11 LGPD: o que existe e como operar
+- **Área do titular**: Conta → *Privacidade e seus dados* (`/conta/privacidade`). Cada direito do art. 18 é um botão: ver tudo, exportar ZIP (JSON + CSV, link de 24 h + e-mail), corrigir (perfil, e-mail com nova confirmação, CPF e renda opcionais), revogar consentimentos, "desligar todos os avisos", sair do lar (levando ou não os dados), anonimizar (imediato), excluir a conta e excluir o lar (carência de 7 dias com cancelamento).
+- **Regras**: ações irreversíveis exigem senha e, se ativo, código 2FA. O responsável por um lar com outros membros precisa transferir a responsabilidade (Família → *Transferir*) ou excluir o lar antes de excluir a própria conta. Na exclusão da conta, lares em que a pessoa era a única são apagados por inteiro; nos compartilhados os lançamentos ficam com "Membro removido". Consentimentos e registros de segurança ficam sem IP/user-agent pelo prazo mínimo.
+- **Retenção** (`settings`, prefixo `retention.`): tentativas de login 12 meses, auditoria 24 meses, lixeira 30 dias, exportações 24 h, sessões 14 dias, alertas 90 dias, backups 30 dias, carência de exclusão 7 dias. O cron aplica uma vez por hora (`RetentionService`) e executa as exclusões vencidas.
+- **Controlador**: quem está em `ADMIN_EMAILS` (no `.env`) vê *Incidentes (controlador)* no menu da conta.
+
+### 3.12 Procedimento em caso de incidente de segurança (art. 48 da LGPD)
+1. **Conter**: troque a senha do cPanel, do banco (`DB_PASS`) e da conta de e-mail; gere novo `CRON_TOKEN`; em Conta → Sessões ativas, oriente os usuários a encerrar sessões. Se o `APP_KEY` puder ter vazado, considere rotacionar a chave (isso invalida campos criptografados: 2FA, observações, CPF; os usuários precisam reconfigurar o 2FA).
+2. **Registrar**: menu → *Incidentes (controlador)* → preencha título, o que aconteceu, dados envolvidos, quando ocorreu e quando foi detectado. Guarde evidências (logs em `storage/logs`, log de auditoria, `email_outbox`).
+3. **Avaliar o risco**: dados sensíveis expostos? quantos titulares? há dano provável? Se houver risco ou dano relevante, siga os passos 4 e 5 em prazo razoável (a ANPD orienta 3 dias úteis).
+4. **Comunicar os titulares**: na tela do incidente, *Comunicar os afetados* (todos ou lista de e-mails), descrevendo medidas adotadas e recomendações. O modelo de e-mail já traz a natureza dos dados, o período, as medidas e o contato do encarregado.
+5. **Comunicar a ANPD** pelo formulário oficial (gov.br/anpd) e registrar na tela (*Registrar comunicação à ANPD*).
+6. **Encerrar** o incidente na tela e anotar as lições aprendidas no campo de anotações.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -144,6 +158,8 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Sessões em banco** (tabela `sessions`) para a tela "Sessões ativas"; `SESSION_DRIVER=files` volta para arquivos se necessário.
 - **Aparelho conhecido** = hash(IP + família de navegador/SO), não o user-agent inteiro, para não disparar aviso a cada atualização do navegador.
 - **Convite aceito na confirmação do e-mail**: quem cria conta com o e-mail convidado entra no lar automaticamente ao confirmar, sem passo extra.
+- **Anonimização preserva as FKs**: a linha do usuário continua existindo (nome "Membro removido", e-mail `removido-{id}@anonimizado.invalid`, sem senha) para que `transactions.created_by` e os totais por membro do lar não quebrem; é o que a lei chama de anonimização e o que a família espera ver.
+- **Exportação síncrona**: o ZIP é gerado na hora (os volumes são pequenos) e guardado em `storage/exports` com token de 24 h; o cron apaga os vencidos.
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
@@ -157,14 +173,15 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 php tests/run.php                      # testes unitários
 php -S 127.0.0.1:8080 tools/dev-server.php   # servidor local (emula o .htaccess)
 bash tools/smoke-fase2.sh              # teste de ponta a ponta da fase 2 (banco limpo + MAIL_DRIVER=log)
+bash tools/smoke-fase3.sh              # teste de ponta a ponta da fase 3 (depois do da fase 2; ADMIN_EMAILS=ana@exemplo.test)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
 ## 7. Roadmap das fases
 
 1. ✅ Fundação
-2. ✅ Contas e segurança (esta entrega): cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
-3. LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, retenção
+2. ✅ Contas e segurança: cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
+3. ✅ LGPD (esta entrega): políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
 4. Cadastros financeiros: contas, categorias, lançamentos, parcelas, anexos, importação CSV/OFX
 5. Recorrências, radar de assinaturas, orçamento, metas, plano de ação
 6. Dashboard, relatórios, exportações

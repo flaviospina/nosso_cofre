@@ -80,6 +80,28 @@ final class AuthService
         ], 'transactional', (int) $user['id']);
     }
 
+    /** Pede a troca de e-mail: link de confirmação vai para o endereço novo; o antigo recebe um aviso. */
+    /** @param array<string,mixed> $user */
+    public static function requestEmailChange(array $user, string $newEmail): void
+    {
+        $newEmail = mb_strtolower(trim($newEmail));
+        $token = Crypto::randomUrlToken(32);
+        Database::insert('email_verifications', [
+            'user_id'    => (int) $user['id'],
+            'email'      => $newEmail,
+            'token_hash' => Crypto::hashToken($token),
+            'expires_at' => gmdate('Y-m-d H:i:s', time() + self::VERIFY_TTL_HOURS * 3600),
+            'created_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+        Mailer::send($newEmail, (string) $user['name'], 'Confirme seu novo e-mail no Nosso Cofre', 'email-change', [
+            'name' => $user['name'], 'url' => absolute_url('/confirmar-email/' . $token), 'hours' => self::VERIFY_TTL_HOURS, 'newEmail' => $newEmail,
+        ], 'transactional', (int) $user['id']);
+        Mailer::send((string) $user['email'], (string) $user['name'], 'Pedido de troca de e-mail na sua conta', 'email-change-notice', [
+            'name' => $user['name'], 'newEmail' => $newEmail, 'sessionsUrl' => absolute_url('/conta/sessoes'),
+        ], 'security', (int) $user['id']);
+        AuditService::log('user.email_change_requested', 'user', (int) $user['id'], ['email' => $user['email']], ['email' => $newEmail]);
+    }
+
     /**
      * Confirma o e-mail pelo token. Devolve o usuário ou null se o token for inválido/expirado.
      * Aceita automaticamente convites pendentes endereçados a esse e-mail.
@@ -100,11 +122,15 @@ final class AuthService
             return null;
         }
         $now = gmdate('Y-m-d H:i:s');
+        $changed = mb_strtolower((string) $user['email']) !== mb_strtolower((string) $row['email']);
+        if ($changed && (new User())->findByEmail((string) $row['email']) !== null) {
+            return null; // o novo e-mail passou a pertencer a outra conta nesse meio-tempo
+        }
         Database::transaction(static function () use ($row, $users, $user, $now): void {
             Database::execute('UPDATE email_verifications SET verified_at = ? WHERE id = ?', [$now, (int) $row['id']]);
             $users->update((int) $user['id'], ['email' => (string) $row['email'], 'email_verified_at' => $now]);
         });
-        AuditService::log('user.email_verified', 'user', (int) $user['id'], null, ['email' => $row['email']], (int) $user['id'], null);
+        AuditService::log($changed ? 'user.email_changed' : 'user.email_verified', 'user', (int) $user['id'], $changed ? ['email' => $user['email']] : null, ['email' => $row['email']], (int) $user['id'], null);
         foreach (Invitation::pendingForEmail((string) $row['email']) as $invitation) {
             InvitationService::accept($invitation, (int) $user['id']);
         }

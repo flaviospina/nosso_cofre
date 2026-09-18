@@ -1,6 +1,9 @@
 <?php
 // app/Views/layouts/base.php — layout principal (mobile-first, tema claro/escuro, CSP com nonce)
 /** @var string $content */
+// Variáveis compartilhadas podem faltar se o erro acontecer antes do boot completo (ex.: banco fora do ar)
+$appName = $appName ?? (string) config('app.name', 'Nosso Cofre');
+$appVersion = $appVersion ?? (string) config('app.version', '');
 $title = isset($title) ? $title . ' · ' . $appName : $appName;
 $user = auth_user();
 $household = \App\Core\Auth::household();
@@ -45,6 +48,9 @@ $household = \App\Core\Auth::household();
 <?= \App\Core\View::partial('navbar', ['user' => $user, 'household' => $household]) ?>
 
 <main id="conteudo" class="nc-main container-fluid px-3 py-3">
+    <?php if ($user !== null && ($user['status'] ?? '') === 'pending_deletion' && !is_route('privacy.*')): ?>
+        <div class="alert alert-warning small"><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>A exclusão da sua conta está agendada. <a href="<?= e(route('privacy.index')) ?>">Cancelar ou ver detalhes</a>.</div>
+    <?php endif; ?>
     <?= \App\Core\View::partial('flash') ?>
     <?= $content ?>
 </main>

@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 use App\Controllers\AccountController;
+use App\Controllers\AdminIncidentController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\EmailVerificationController;
@@ -13,6 +14,7 @@ use App\Controllers\InvitationController;
 use App\Controllers\LegalController;
 use App\Controllers\OnboardingController;
 use App\Controllers\PasswordResetController;
+use App\Controllers\PrivacyController;
 use App\Controllers\SystemController;
 use App\Controllers\TwoFactorController;
 use App\Core\Router;
@@ -77,6 +79,32 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->get('/sessoes', [AccountController::class, 'sessions'], 'account.sessions');
         $r->post('/sessoes/encerrar', [AccountController::class, 'revokeOtherSessions'], 'account.sessions.revoke');
         $r->get('/atividade', [AccountController::class, 'activity'], 'account.activity');
+
+        // Fase 3: Privacidade e seus dados (LGPD)
+        $r->get('/privacidade', [PrivacyController::class, 'index'], 'privacy.index');
+        $r->post('/privacidade/consentimentos', [PrivacyController::class, 'updateConsents'], 'privacy.consents');
+        $r->post('/privacidade/desligar-avisos', [PrivacyController::class, 'revokeAllNotifications'], 'privacy.revoke_all');
+        $r->get('/privacidade/meus-dados', [PrivacyController::class, 'myData'], 'privacy.my_data');
+        $r->post('/privacidade/exportar', [PrivacyController::class, 'export'], 'privacy.export');
+        $r->get('/privacidade/exportacoes/{token}', [PrivacyController::class, 'download'], 'privacy.export.download');
+        $r->post('/privacidade/email', [PrivacyController::class, 'requestEmailChange'], 'privacy.email');
+        $r->post('/privacidade/opcionais', [PrivacyController::class, 'updateOptional'], 'privacy.optional');
+        $r->post('/privacidade/anonimizar', [PrivacyController::class, 'anonymize'], 'privacy.anonymize');
+        $r->post('/privacidade/excluir-conta', [PrivacyController::class, 'requestDeletion'], 'privacy.delete');
+        $r->post('/privacidade/excluir-conta/cancelar', [PrivacyController::class, 'cancelDeletion'], 'privacy.delete.cancel');
+        $r->post('/privacidade/excluir-lar', [PrivacyController::class, 'requestHouseholdDeletion'], 'privacy.household.delete');
+        $r->post('/privacidade/excluir-lar/cancelar', [PrivacyController::class, 'cancelHouseholdDeletion'], 'privacy.household.cancel');
+        $r->post('/privacidade/sair-do-lar', [PrivacyController::class, 'leaveHousehold'], 'privacy.leave');
+    });
+
+    // Área do controlador (ADMIN_EMAILS)
+    $r->group(['prefix' => '/admin', 'middleware' => ['admin']], static function (Router $r): void {
+        $r->get('/incidentes', [AdminIncidentController::class, 'index'], 'admin.incidents');
+        $r->post('/incidentes', [AdminIncidentController::class, 'store'], 'admin.incidents.store');
+        $r->get('/incidentes/{id:\d+}', [AdminIncidentController::class, 'show'], 'admin.incidents.show');
+        $r->post('/incidentes/{id:\d+}/comunicar', [AdminIncidentController::class, 'notify'], 'admin.incidents.notify');
+        $r->post('/incidentes/{id:\d+}/encerrar', [AdminIncidentController::class, 'close'], 'admin.incidents.close');
+        $r->post('/incidentes/{id:\d+}/anpd', [AdminIncidentController::class, 'anpd'], 'admin.incidents.anpd');
     });
 
     // Área do lar (exige lar ativo e, para owner/admin de família, 2FA)
@@ -91,5 +119,6 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/familia/membros/{id:\d+}/papel', [FamilyController::class, 'changeRole'], 'family.member.role');
         $r->post('/familia/membros/{id:\d+}/remover', [FamilyController::class, 'removeMember'], 'family.member.remove');
         $r->post('/familia/sair', [FamilyController::class, 'leave'], 'family.leave');
+        $r->post('/familia/transferir', [FamilyController::class, 'transfer'], 'family.transfer');
     });
 });

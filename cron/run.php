@@ -42,6 +42,14 @@ try {
         $tokens += Database::execute('DELETE FROM password_resets WHERE expires_at < ? OR used_at IS NOT NULL', [gmdate('Y-m-d H:i:s', time() - 86400)]);
         $tokens += Database::execute('DELETE FROM email_verifications WHERE expires_at < ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s', time() - 86400)]);
         $lines[] = "sessões expiradas removidas: {$sessions}; tokens expirados removidos: {$tokens}";
+
+        // Fase 3: retenção LGPD (uma vez por hora basta) e exclusões agendadas
+        $lastRetention = Database::scalar("SELECT MAX(started_at) FROM cron_runs WHERE task = 'retention'");
+        if ($lastRetention === null || strtotime((string) $lastRetention . ' UTC') < time() - 3600) {
+            $summary = \App\Services\RetentionService::run();
+            Database::execute('INSERT INTO cron_runs (task, started_at, finished_at, status, message) VALUES (?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?, ?)', ['retention', 'ok', json_encode($summary)]);
+            $lines[] = 'retenção: ' . json_encode($summary, JSON_UNESCAPED_UNICODE);
+        }
     } else {
         $lines[] = 'heartbeat: banco indisponível';
     }

@@ -69,6 +69,10 @@ return [
         'private' => Env::get('VAPID_PRIVATE_KEY', ''),
         'subject' => Env::get('VAPID_SUBJECT', ''),
     ],
+    'admin' => [
+        // E-mails dos usuários que acessam a área do controlador (registro e comunicação de incidentes)
+        'emails' => array_values(array_filter(array_map('trim', explode(',', Env::get('ADMIN_EMAILS', ''))))),
+    ],
     'legal' => [
         'controller_name'     => Env::get('CONTROLLER_NAME', ''),
         'controller_document' => Env::get('CONTROLLER_DOCUMENT', ''),

@@ -108,7 +108,7 @@ final class AccountController extends Controller
         $user = Auth::user() ?? [];
         $data = $this->validate(['password' => 'required', 'code' => 'required|min:6|max:20'], ['password' => 'senha', 'code' => 'código'], 'account.two_factor');
         if (!Auth::verifyPassword((string) $data['password'], (string) $user['password_hash']) || !TwoFactorService::verifyCode($user, (string) $data['code'])) {
-            Session::flashErrors(['code' => ['Senha ou código inválidos.']]);
+            Session::flashErrors(['code' => ['Senha ou código inválidos (um código já utilizado não vale de novo; aguarde o próximo).']]);
             return $this->redirectRoute('account.two_factor');
         }
         if (Auth::twoFactorRequired() || (Auth::isFamily() && Auth::canManage())) {

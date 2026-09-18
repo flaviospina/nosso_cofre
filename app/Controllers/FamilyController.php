@@ -121,6 +121,16 @@ final class FamilyController extends Controller
         return $this->redirectRoute('family.index');
     }
 
+    /** Transfere a responsabilidade do lar (só o responsável). */
+    public function transfer(): Response
+    {
+        $this->requireOwner();
+        $data = $this->validate(['member_id' => 'required|integer'], ['member_id' => 'membro'], 'family.index');
+        $error = HouseholdService::transferOwnership((int) Auth::householdId(), (int) Auth::id(), (int) $data['member_id']);
+        $this->flash($error === null ? 'success' : 'danger', $error ?? 'Responsabilidade transferida. Você agora é administrador.');
+        return $this->redirectRoute('family.index');
+    }
+
     /** O próprio membro sai do lar (o responsável não pode sair; precisa transferir ou excluir o lar). */
     public function leave(): Response
     {

@@ -130,13 +130,22 @@ $isFamily = $household['type'] === 'family';
         </form>
     <?php endif; ?>
 
-    <?php if ($isFamily && !$isOwner): ?>
-        <details class="card nc-card">
-            <summary class="card-body py-3 fw-semibold">Sair deste lar</summary>
+    <?php if ($isFamily && $isOwner && count($members) > 1): ?>
+        <details class="card nc-card mb-4">
+            <summary class="card-body py-3 fw-semibold">Transferir a responsabilidade pelo lar</summary>
             <div class="card-body pt-0">
-                <p class="small text-body-secondary">Você deixa de ver os dados do lar. O que escolher levar ou deixar dos seus lançamentos entra na área de privacidade (próxima fase); por enquanto, os lançamentos permanecem no lar.</p>
-                <form method="post" action="<?= e(route('family.leave')) ?>" data-once data-confirm="Sair do lar <?= e($household['name']) ?>?"><?= csrf_field() ?><button class="btn btn-outline-danger">Sair do lar</button></form>
+                <p class="small text-body-secondary">O novo responsável passa a gerenciar membros e a exclusão do lar; você vira administrador. Ele precisará ativar o 2FA.</p>
+                <form method="post" action="<?= e(route('family.transfer')) ?>" data-once data-confirm="Transferir a responsabilidade do lar?" class="row g-2">
+                    <?= csrf_field() ?>
+                    <div class="col-12 col-sm-8"><select class="form-select" name="member_id" aria-label="Novo responsável">
+                        <?php foreach ($members as $m): if ((int) $m['user_id'] === $me) continue; ?><option value="<?= (int) $m['id'] ?>"><?= e($m['name']) ?> (<?= e($roleLabels[$m['role']] ?? $m['role']) ?>)</option><?php endforeach; ?>
+                    </select></div>
+                    <div class="col-12 col-sm-4"><button class="btn btn-outline-danger w-100">Transferir</button></div>
+                </form>
             </div>
         </details>
+    <?php endif; ?>
+    <?php if ($isFamily && !$isOwner): ?>
+        <p class="small text-body-secondary">Para sair deste lar (levando ou não seus lançamentos), use <a href="<?= e(route('privacy.index')) ?>">Privacidade e seus dados</a>.</p>
     <?php endif; ?>
 </div>

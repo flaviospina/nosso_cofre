@@ -153,6 +153,28 @@ final class HouseholdService
         return true;
     }
 
+    /** Transfere a responsabilidade do lar a outro membro ativo; o antigo responsável vira administrador. */
+    public static function transferOwnership(int $householdId, int $fromUserId, int $toMemberId): ?string
+    {
+        $target = Database::selectOne('SELECT * FROM household_members WHERE id = ? AND household_id = ? AND left_at IS NULL', [$toMemberId, $householdId]);
+        if ($target === null || (int) $target['user_id'] === $fromUserId) {
+            return 'Escolha outro membro ativo do lar.';
+        }
+        $targetUser = Database::selectOne('SELECT status, totp_enabled_at FROM users WHERE id = ?', [(int) $target['user_id']]);
+        if ($targetUser === null || $targetUser['status'] !== 'active') {
+            return 'Esse membro não está ativo.';
+        }
+        $now = gmdate('Y-m-d H:i:s');
+        Database::transaction(static function () use ($householdId, $fromUserId, $target, $now): void {
+            Database::execute("UPDATE household_members SET role = 'admin', updated_at = ? WHERE household_id = ? AND user_id = ? AND left_at IS NULL", [$now, $householdId, $fromUserId]);
+            Database::execute("UPDATE household_members SET role = 'owner', updated_at = ? WHERE id = ?", [$now, (int) $target['id']]);
+            Database::execute('UPDATE households SET owner_user_id = ?, updated_at = ? WHERE id = ?', [(int) $target['user_id'], $now, $householdId]);
+        });
+        AuditService::log('household.ownership_transferred', 'household', $householdId, ['owner_user_id' => $fromUserId], ['owner_user_id' => (int) $target['user_id']], $fromUserId, $householdId);
+        Auth::refresh();
+        return null;
+    }
+
     /** Lares ativos de um usuário (para o seletor, quando houver mais de um). */
     /** @return array<int,array<string,mixed>> */
     public static function householdsOf(int $userId): array
