@@ -48,7 +48,18 @@ $hasHousehold = $household !== null;
                 <ul class="navbar-nav me-auto mb-2 mb-md-0">
                     <?php if ($user !== null && $hasHousehold): ?>
                         <li class="nav-item"><a class="nav-link <?= is_route('dashboard') ? 'active' : '' ?>" href="<?= e(route('dashboard')) ?>"><i class="bi bi-speedometer2 me-1" aria-hidden="true"></i>Início</a></li>
+                        <li class="nav-item"><a class="nav-link <?= is_route('transactions.*') ? 'active' : '' ?>" href="<?= e(route('transactions.index')) ?>"><i class="bi bi-receipt me-1" aria-hidden="true"></i>Lançamentos</a></li>
+                        <li class="nav-item"><a class="nav-link <?= is_route('accounts.*') ? 'active' : '' ?>" href="<?= e(route('accounts.index')) ?>"><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>Contas</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('family.*') ? 'active' : '' ?>" href="<?= e(route('family.index')) ?>"><i class="bi bi-people me-1" aria-hidden="true"></i><?= ($household['type'] ?? '') === 'family' ? 'Família' : 'Meu lar' ?></a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle <?= is_route('categories.*') || is_route('import.*') ? 'active' : '' ?>" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-grid me-1" aria-hidden="true"></i>Mais</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="<?= e(route('categories.index')) ?>"><i class="bi bi-tags me-2" aria-hidden="true"></i>Categorias</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('import.index')) ?>"><i class="bi bi-file-earmark-arrow-up me-2" aria-hidden="true"></i>Importar extrato</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('transactions.templates')) ?>"><i class="bi bi-star me-2" aria-hidden="true"></i>Modelos favoritos</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('transactions.trash')) ?>"><i class="bi bi-trash me-2" aria-hidden="true"></i>Lixeira</a></li>
+                            </ul>
+                        </li>
                     <?php elseif ($user === null): ?>
                         <li class="nav-item"><a class="nav-link <?= is_route('auth.login') ? 'active' : '' ?>" href="<?= e(route('auth.login')) ?>">Entrar</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('auth.register') ? 'active' : '' ?>" href="<?= e(route('auth.register')) ?>">Criar conta</a></li>

@@ -47,6 +47,7 @@ try {
         $lastRetention = Database::scalar("SELECT MAX(started_at) FROM cron_runs WHERE task = 'retention'");
         if ($lastRetention === null || strtotime((string) $lastRetention . ' UTC') < time() - 3600) {
             $summary = \App\Services\RetentionService::run();
+            $summary['importacoes_temporarias'] = \App\Services\ImportService::purgeStale();
             Database::execute('INSERT INTO cron_runs (task, started_at, finished_at, status, message) VALUES (?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?, ?)', ['retention', 'ok', json_encode($summary)]);
             $lines[] = 'retenção: ' . json_encode($summary, JSON_UNESCAPED_UNICODE);
         }

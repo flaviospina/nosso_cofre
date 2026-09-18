@@ -6,16 +6,20 @@ declare(strict_types=1);
 use App\Controllers\AccountController;
 use App\Controllers\AdminIncidentController;
 use App\Controllers\AuthController;
+use App\Controllers\CategoryController;
 use App\Controllers\DashboardController;
 use App\Controllers\EmailVerificationController;
 use App\Controllers\FamilyController;
+use App\Controllers\FinancialAccountController;
 use App\Controllers\HomeController;
+use App\Controllers\ImportController;
 use App\Controllers\InvitationController;
 use App\Controllers\LegalController;
 use App\Controllers\OnboardingController;
 use App\Controllers\PasswordResetController;
 use App\Controllers\PrivacyController;
 use App\Controllers\SystemController;
+use App\Controllers\TransactionController;
 use App\Controllers\TwoFactorController;
 use App\Core\Router;
 
@@ -120,5 +124,44 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/familia/membros/{id:\d+}/remover', [FamilyController::class, 'removeMember'], 'family.member.remove');
         $r->post('/familia/sair', [FamilyController::class, 'leave'], 'family.leave');
         $r->post('/familia/transferir', [FamilyController::class, 'transfer'], 'family.transfer');
+
+        // Fase 4: cadastros financeiros
+        $r->get('/contas', [FinancialAccountController::class, 'index'], 'accounts.index');
+        $r->get('/contas/nova', [FinancialAccountController::class, 'create'], 'accounts.create');
+        $r->post('/contas/nova', [FinancialAccountController::class, 'store'], 'accounts.store');
+        $r->get('/contas/{id:\d+}/editar', [FinancialAccountController::class, 'edit'], 'accounts.edit');
+        $r->post('/contas/{id:\d+}/editar', [FinancialAccountController::class, 'update'], 'accounts.update');
+        $r->post('/contas/{id:\d+}/arquivar', [FinancialAccountController::class, 'toggle'], 'accounts.toggle');
+        $r->post('/contas/{id:\d+}/excluir', [FinancialAccountController::class, 'destroy'], 'accounts.destroy');
+
+        $r->get('/categorias', [CategoryController::class, 'index'], 'categories.index');
+        $r->post('/categorias', [CategoryController::class, 'store'], 'categories.store');
+        $r->post('/categorias/{id:\d+}/editar', [CategoryController::class, 'update'], 'categories.update');
+        $r->post('/categorias/{id:\d+}/excluir', [CategoryController::class, 'destroy'], 'categories.destroy');
+        $r->post('/categorias/{id:\d+}/ocultar', [CategoryController::class, 'toggleHidden'], 'categories.hide');
+
+        $r->get('/lancamentos', [TransactionController::class, 'index'], 'transactions.index');
+        $r->get('/lancamentos/novo', [TransactionController::class, 'create'], 'transactions.create');
+        $r->post('/lancamentos/novo', [TransactionController::class, 'store'], 'transactions.store');
+        $r->get('/lancamentos/lixeira', [TransactionController::class, 'trashIndex'], 'transactions.trash');
+        $r->get('/lancamentos/modelos', [TransactionController::class, 'templates'], 'transactions.templates');
+        $r->post('/lancamentos/modelos/{id:\d+}/excluir', [TransactionController::class, 'deleteTemplate'], 'transactions.templates.delete');
+        $r->get('/lancamentos/sugerir', [TransactionController::class, 'suggest'], 'transactions.suggest');
+        $r->post('/lancamentos/lote', [TransactionController::class, 'bulk'], 'transactions.bulk');
+        $r->get('/lancamentos/{id:\d+}/editar', [TransactionController::class, 'edit'], 'transactions.edit');
+        $r->post('/lancamentos/{id:\d+}/editar', [TransactionController::class, 'update'], 'transactions.update');
+        $r->post('/lancamentos/{id:\d+}/status', [TransactionController::class, 'status'], 'transactions.status');
+        $r->post('/lancamentos/{id:\d+}/excluir', [TransactionController::class, 'trash'], 'transactions.delete');
+        $r->post('/lancamentos/{id:\d+}/restaurar', [TransactionController::class, 'restore'], 'transactions.restore');
+        $r->post('/lancamentos/{id:\d+}/destruir', [TransactionController::class, 'destroy'], 'transactions.destroy');
+        $r->post('/lancamentos/{id:\d+}/modelo', [TransactionController::class, 'saveTemplate'], 'transactions.template');
+        $r->get('/lancamentos/{id:\d+}/anexo', [TransactionController::class, 'attachment'], 'transactions.attachment');
+
+        $r->get('/importar', [ImportController::class, 'index'], 'import.index');
+        $r->post('/importar', [ImportController::class, 'upload'], 'import.upload');
+        $r->get('/importar/{key}', [ImportController::class, 'preview'], 'import.preview');
+        $r->post('/importar/{key}/mapear', [ImportController::class, 'preview'], 'import.map');
+        $r->post('/importar/{key}/confirmar', [ImportController::class, 'confirm'], 'import.confirm');
+        $r->post('/importar/lotes/{id:\d+}/desfazer', [ImportController::class, 'undo'], 'import.undo');
     });
 });

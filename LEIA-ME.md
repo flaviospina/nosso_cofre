@@ -33,7 +33,7 @@ cofre/                      ← raiz do projeto (= public_html/cofre no cPanel)
 ├── sql/schema.sql          ← esquema completo, idempotente
 ├── sql/seed.sql            ← categorias pt-BR + lar de teste (ver §5)
 ├── vendor/                 ← bibliotecas vendorizadas (Web Push, fase 7)
-├── storage/                ← logs, cache, uploads, exports, backups, sessions (nunca servida)
+├── storage/                ← logs, cache (importações temporárias), uploads (comprovantes), exports, backups, sessions (nunca servida)
 ├── legal/                  ← Política de Privacidade e Termos versionados (fase 3)
 ├── tests/run.php           ← testes (php tests/run.php)
 └── tools/                  ← utilitários de desenvolvimento (não precisam ir para o servidor)
@@ -144,6 +144,16 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 5. **Comunicar a ANPD** pelo formulário oficial (gov.br/anpd) e registrar na tela (*Registrar comunicação à ANPD*).
 6. **Encerrar** o incidente na tela e anotar as lições aprendidas no campo de anotações.
 
+### 3.13 Cadastros financeiros (fase 4): como usar e o que fica no servidor
+- **Contas e cartões** (`/contas`): tipos conta corrente, poupança/reserva, cartão de crédito (fechamento, vencimento e limite), dinheiro e investimento; dona ou conjunta. O saldo **atual** soma só o que está pago; o **projetado** inclui pendentes e agendados. Conta com lançamentos não é excluída, só **arquivada** (some do lançamento rápido, continua nos relatórios).
+- **Categorias** (`/categorias`): o modelo padrão pt-BR (ids fixos do `seed.sql`) vale para todos os lares e pode ser **ocultado** por lar; cada lar cria as suas (com pai, ícone, cor e a marca "essencial"). Categorias com lançamentos são desativadas em vez de excluídas.
+- **Lançamentos** (`/lancamentos`): despesa, receita e transferência (uma linha só, com conta de origem e destino); parcelamento em até 120× (a última parcela absorve o arredondamento; 31/01 + 1 mês = 28/02); situação pago/pendente/agendado com toque na lista; etiquetas; observações criptografadas; **privado** (os outros membros veem só o valor nos totais); modelos favoritos e "repetir último"; edição em lote (categoria, situação, responsável, privacidade, lixeira); lixeira com 30 dias; filtros por período, membro, conta, categoria (pai inclui filhas), tipo, situação, etiqueta e busca por texto.
+- **Comprovantes**: JPG, PNG, WEBP ou PDF até 5 MB, gravados em `storage/uploads/{lar}/` (fora do `public`, servidos só por `/lancamentos/{id}/anexo` com sessão e checagem de lar/privacidade). Imagens são reprocessadas: orientação corrigida, redução para no máximo 1600 px e **remoção de EXIF** (localização, aparelho). Exige a extensão GD (padrão no HostGator); sem GD a imagem é gravada como veio.
+- **Importação** (`/importar`): CSV (detecta delimitador, cabeçalho e mapeamento; aceita coluna única de valor com sinal, colunas separadas de débito/crédito, coluna D/C e "inverter sinal" para faturas) e OFX/QFX (`STMTTRN`, `FITID`). Antes de gravar, a pré-visualização marca **duplicados** (mesma data + valor + tipo + descrição já existente, ou mesmo FITID) e sugere categorias pelas regras aprendidas. Cada lote fica em *Importar → Lotes* com **Desfazer** (manda tudo para a lixeira). O arquivo enviado fica em `storage/cache/import-*` por 2 h e é apagado pelo cron.
+- **Sugestão de categoria**: cada lançamento salvo com categoria "ensina" a regra (`category_rules`, texto normalizado da descrição sem números e sem palavras como PIX/TED/COMPRA). O formulário consulta `/lancamentos/sugerir` ao sair do campo descrição.
+- **Permissões**: `viewer` só lê; `member` cria e edita os próprios (ou de todos, se em Família → *Membros podem editar lançamentos dos outros*); `admin`/`owner` editam tudo, exceto lançamentos privados de outros membros.
+- **Limite de upload no PHP**: os formulários aceitam 5 MB (comprovante) e 2 MB (extrato). Se o cPanel estiver com `upload_max_filesize` menor (padrão 2M em alguns planos), ajuste em *Select PHP Version → Options* (ou `MultiPHP INI Editor`) para 8M/`post_max_size` 10M.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -160,6 +170,11 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Convite aceito na confirmação do e-mail**: quem cria conta com o e-mail convidado entra no lar automaticamente ao confirmar, sem passo extra.
 - **Anonimização preserva as FKs**: a linha do usuário continua existindo (nome "Membro removido", e-mail `removido-{id}@anonimizado.invalid`, sem senha) para que `transactions.created_by` e os totais por membro do lar não quebrem; é o que a lei chama de anonimização e o que a família espera ver.
 - **Exportação síncrona**: o ZIP é gerado na hora (os volumes são pequenos) e guardado em `storage/exports` com token de 24 h; o cron apaga os vencidos.
+- **Transferência em uma linha só** (`type = transfer`, `account_id` origem, `transfer_account_id` destino) em vez de duas linhas espelhadas: os saldos são calculados a partir dela e não há risco de "meia transferência"; `transfer_pair_id` fica reservado para integrações futuras.
+- **Parcelas são lançamentos independentes** agrupados por `installment_group`: cada uma pode ser paga, editada ou excluída sozinha (como acontece na vida real com faturas), e os relatórios por mês ficam corretos sem cálculo especial.
+- **Duplicidade na importação por hash** `sha256(data|valor|tipo|descrição normalizada)` gravado em `transactions.import_hash` (também nos lançamentos manuais), além do `FITID` do OFX guardado em `tags.fitid`.
+- **Categorias globais compartilhadas** (`household_id NULL`) com ocultação por lar em `households.settings.hidden_categories`, em vez de copiar 120 categorias para cada lar: o modelo pode evoluir no seed sem migração de dados.
+- **Formulário sem dependências**: seletor de categorias em "chips" (rádios estilizados) filtrável por texto, valor em pt-BR (`1.234,56`) aceito pelo `Validator` e formatado no `blur` pelo `app.js`; o lançamento rápido cabe em três toques (tipo já vem escolhido pelo botão do painel, valor, categoria, salvar).
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
@@ -170,10 +185,11 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 ## 6. Desenvolvimento local
 
 ```
-php tests/run.php                      # testes unitários
+php tests/run.php                      # testes unitários e de integração (os de banco são pulados sem banco)
 php -S 127.0.0.1:8080 tools/dev-server.php   # servidor local (emula o .htaccess)
 bash tools/smoke-fase2.sh              # teste de ponta a ponta da fase 2 (banco limpo + MAIL_DRIVER=log)
 bash tools/smoke-fase3.sh              # teste de ponta a ponta da fase 3 (depois do da fase 2; ADMIN_EMAILS=ana@exemplo.test)
+bash tools/smoke-fase4.sh              # teste de ponta a ponta da fase 4 (banco limpo com seed; usa o lar "Família Spina")
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
@@ -181,8 +197,8 @@ Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://12
 
 1. ✅ Fundação
 2. ✅ Contas e segurança: cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
-3. ✅ LGPD (esta entrega): políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
-4. Cadastros financeiros: contas, categorias, lançamentos, parcelas, anexos, importação CSV/OFX
+3. ✅ LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
+4. ✅ Cadastros financeiros (esta entrega): contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
 5. Recorrências, radar de assinaturas, orçamento, metas, plano de ação
 6. Dashboard, relatórios, exportações
 7. Notificações: configuração, PWA/Web Push, sons e cores, scheduler, central, cron, backup
