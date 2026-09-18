@@ -33,7 +33,7 @@ get "$JAR" "/conta/2fa"; SECRET=$(grep -o 'user-select-all">[A-Z2-7 ]*' "$TMP/bo
 post "$JAR" "/conta/2fa/ativar" -d "code=$(totp "$SECRET")"; get "$JAR" "/painel"; check "Flávio no painel após 2FA" "200" "$CODE"
 post "$JAR2" "/entrar" -d "email=priscila@exemplo.test" -d "password=Cofre@2026teste"; get "$JAR2" "/conta/2fa"; SECRET2=$(grep -o 'user-select-all">[A-Z2-7 ]*' "$TMP/body" | sed 's/.*">//' | tr -d ' ')
 post "$JAR2" "/conta/2fa/ativar" -d "code=$(totp "$SECRET2")"; get "$JAR2" "/painel"; check "Priscila no painel após 2FA" "200" "$CODE"
-contains "painel mostra contas do seed" "$(cat "$TMP/body")" "Conta corrente Priscila"
+contains "painel abre com o score" "$(cat "$TMP/body")" "Saúde financeira"
 
 echo "== Contas e cartões"
 get "$JAR" "/contas"; check "GET /contas 200" "200" "$CODE"; contains "lista contas do seed" "$(cat "$TMP/body")" "Reserva de emergência"
@@ -64,7 +64,7 @@ post "$JAR" "/categorias/9/ocultar"; check "Lazer visível de novo" "" "$(sql "S
 get "$JAR2" "/categorias"; contains "outro membro vê a categoria do lar" "$(cat "$TMP/body")" "Ração e petiscos"
 
 echo "== Lançamentos: rápido, validação, parcelas, transferência"
-get "$JAR" "/lancamentos"; check "GET /lancamentos 200" "200" "$CODE"; contains "lista vazia orienta" "$(cat "$TMP/body")" "Nenhum lançamento neste período"
+get "$JAR" "/lancamentos"; check "GET /lancamentos 200" "200" "$CODE"; contains "lista mostra as ocorrências agendadas das recorrências do seed" "$(cat "$TMP/body")" "Agendado"
 post "$JAR" "/lancamentos/novo" -d "type=expense" -d "amount=0" -d "date=$TODAY" -d "description=Zero" -d "account_id=1"; get "$JAR" "/lancamentos/novo"; contains "valor zero é recusado" "$(cat "$TMP/body")" "maior que zero"
 post "$JAR" "/lancamentos/novo" -d "type=expense" -d "amount=10,00" -d "date=$TODAY" -d "description=Cat errada" -d "account_id=1" -d "category_id=19"; get "$JAR" "/lancamentos/novo"; contains "categoria de receita em despesa é recusada" "$(cat "$TMP/body")" "Categoria inválida para este tipo"
 post "$JAR" "/lancamentos/novo" -d "type=expense" -d "amount=123,45" -d "date=$TODAY" -d "description=Mercado Bom Preco" -d "account_id=1" -d "category_id=110" -d "responsible_user_id=1" -d "status=paid" -d "tags=semana, casa" -d "notes=Compra do mês"
@@ -88,7 +88,7 @@ post "$JAR" "/lancamentos/novo" -d "type=income" -d "amount=5.000,00" -d "date=$
 post "$JAR" "/lancamentos/novo" -d "type=expense" -d "amount=80,00" -d "date=$TODAY" -d "description=Conta de luz" -d "account_id=1" -d "category_id=104" -d "status=pending" -d "save_and_new=1"
 check "salvar e novo volta ao formulário" "/lancamentos/novo?tipo=expense" "$LOC"
 get "$JAR" "/contas"; contains "saldo da conta reflete lançamentos pagos" "$(cat "$TMP/body")" "4.776,55"
-get "$JAR" "/painel"; contains "painel: a pagar nos próximos dias" "$(cat "$TMP/body")" "Conta de luz"; contains "painel: últimos lançamentos" "$(cat "$TMP/body")" "Salário"
+get "$JAR" "/painel"; contains "painel: a vencer nos próximos dias" "$(cat "$TMP/body")" "A vencer nos próximos 7 dias"; contains "painel: receita do mês" "$(cat "$TMP/body")" "5.000,00 receitas"
 
 echo "== Lista, filtros e busca"
 get "$JAR" "/lancamentos?$PERIOD"; contains "lista mostra a despesa" "$(cat "$TMP/body")" "Mercado Bom Preco"; contains "totais do período (receitas)" "$(cat "$TMP/body")" "5.000,00"
@@ -108,7 +108,7 @@ post "$JAR" "/lancamentos/$TX1/status" -d "status=paid"; check "marcar pago pree
 post "$JAR2" "/lancamentos/novo" -d "type=expense" -d "amount=200,00" -d "date=$TODAY" -d "description=Presente surpresa" -d "account_id=2" -d "category_id=9" -d "is_private=1" -d "responsible_user_id=2"
 PRIV=$(sql "SELECT id FROM transactions WHERE household_id=1 AND description='Presente surpresa'")
 get "$JAR" "/lancamentos?$PERIOD"; contains "outro membro vê 'Lançamento privado'" "$(cat "$TMP/body")" "Lançamento privado"; lacks "descrição privada escondida" "$(cat "$TMP/body")" "Presente surpresa"
-contains "valor privado entra nos totais (despesas)" "$(cat "$TMP/body")" "$(php -r 'echo number_format(130+33.33+80+200, 2, ",", ".");')"
+contains "valor privado entra nos totais (despesas)" "$(cat "$TMP/body")" "$(php -r 'echo number_format((float) $argv[1], 2, ",", ".");' "$(sql "SELECT SUM(amount) FROM transactions WHERE household_id=1 AND type='expense' AND deleted_at IS NULL AND date BETWEEN '$MONTH_FROM' AND '$MONTH_TO'")")"
 get "$JAR2" "/lancamentos?$PERIOD"; contains "quem criou vê a descrição" "$(cat "$TMP/body")" "Presente surpresa"
 get "$JAR" "/lancamentos/$PRIV/editar"; check "outro membro não edita o privado (403)" "403" "$CODE"
 get "$JAR" "/lancamentos?$PERIOD&busca=Presente"; lacks "busca não vaza descrição privada" "$(cat "$TMP/body")" "Presente surpresa"

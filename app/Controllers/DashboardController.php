@@ -6,64 +6,60 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
-use App\Core\Database;
 use App\Core\Response;
 use App\Models\Category;
 use App\Models\HouseholdMember;
-use App\Models\Transaction;
 use App\Services\AccountService;
+use App\Services\InsightsService;
+use App\Services\RecurrenceService;
 use App\Services\TransactionPolicy;
 
-/**
- * Painel inicial. Nesta fase mostra saldos, o resumo do mês, contas a pagar nos próximos dias e os últimos lançamentos;
- * os 11 indicadores e os gráficos entram na fase 6.
- */
+/** Painel (/painel?mes=AAAA-MM&membro=id): os 11 indicadores com gráficos e filtros por mês e membro. */
 final class DashboardController extends Controller
 {
     public function index(): Response
     {
         $household = Auth::household();
         $householdId = (int) Auth::householdId();
-        $members = (new HouseholdMember())->activeMembers();
-        $accounts = AccountService::withBalances($householdId, true);
-        $stage = (string) ($household['settings']['onboarding'] ?? 'setup');
         $today = new \DateTimeImmutable('today', user_timezone());
-        $from = $today->modify('first day of this month')->format('Y-m-d');
-        $to = $today->modify('last day of this month')->format('Y-m-d');
-        $month = Database::selectOne(
-            "SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount END), 0) AS income,
-                    COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) AS expense,
-                    COALESCE(SUM(CASE WHEN type = 'expense' AND status <> 'paid' THEN amount END), 0) AS expense_open,
-                    COUNT(*) AS n
-               FROM transactions WHERE household_id = ? AND deleted_at IS NULL AND date BETWEEN ? AND ?",
-            [$householdId, $from, $to]
-        ) ?? ['income' => 0, 'expense' => 0, 'expense_open' => 0, 'n' => 0];
-        $model = new Transaction();
-        $upcoming = Database::select(
-            "SELECT t.*, a.name AS account_name FROM transactions t JOIN accounts a ON a.id = t.account_id
-              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'paid' AND t.date <= ?
-              ORDER BY t.date, t.id LIMIT 8",
-            [$householdId, $today->modify('+7 days')->format('Y-m-d')]
-        );
-        $latest = Database::select(
-            'SELECT t.*, a.name AS account_name, u.name AS responsible_name, u.color AS responsible_color FROM transactions t JOIN accounts a ON a.id = t.account_id LEFT JOIN users u ON u.id = t.responsible_user_id
-              WHERE t.household_id = ? AND t.deleted_at IS NULL ORDER BY t.created_at DESC, t.id DESC LIMIT 6',
-            [$householdId]
-        );
+        $month = $this->month($today);
+        $memberId = null;
+        $members = (new HouseholdMember())->activeMembers();
+        $wanted = (int) $this->request->query('membro', 0);
+        foreach ($members as $m) {
+            if ((int) $m['user_id'] === $wanted) {
+                $memberId = $wanted;
+            }
+        }
+        RecurrenceService::generate($householdId, $today);
+        $data = InsightsService::dashboard($householdId, $month, $memberId, $today);
+        $monthDate = new \DateTimeImmutable($month);
         return $this->view('dashboard/index', [
             'title'      => 'Início',
             'household'  => $household,
             'members'    => $members,
-            'accounts'   => $accounts,
-            'totals'     => AccountService::totals($accounts),
+            'memberId'   => $memberId,
+            'accounts'   => AccountService::withBalances($householdId, true),
+            'insights'   => $data,
             'month'      => $month,
-            'monthLabel' => month_name((int) $today->format('n')) . ' de ' . $today->format('Y'),
-            'upcoming'   => array_map(static fn(array $r): array => TransactionPolicy::mask($model->castRow($r)), $upcoming),
-            'latest'     => array_map(static fn(array $r): array => TransactionPolicy::mask($model->castRow($r)), $latest),
-            'categories' => (new Category())->map(),
+            'monthLabel' => month_name((int) $monthDate->format('n')) . ' de ' . $monthDate->format('Y'),
+            'prevMonth'  => $monthDate->modify('-1 month')->format('Y-m'),
+            'nextMonth'  => $monthDate->modify('+1 month')->format('Y-m'),
+            'isCurrent'  => $monthDate->format('Y-m') === $today->format('Y-m'),
             'today'      => $today->format('Y-m-d'),
-            'stage'      => $stage,
+            'stage'      => (string) ($household['settings']['onboarding'] ?? 'setup'),
             'canWrite'   => TransactionPolicy::canCreate(),
+            'isFamily'   => Auth::isFamily(),
+            'categories' => (new Category())->map(),
         ]);
+    }
+
+    private function month(\DateTimeImmutable $today): string
+    {
+        $value = (string) $this->request->query('mes', '');
+        if (preg_match('/^(\d{4})-(\d{2})$/', $value, $m) && (int) $m[2] >= 1 && (int) $m[2] <= 12) {
+            return $m[1] . '-' . $m[2] . '-01';
+        }
+        return $today->format('Y-m-01');
     }
 }

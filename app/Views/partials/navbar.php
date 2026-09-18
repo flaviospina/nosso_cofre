@@ -50,6 +50,7 @@ $hasHousehold = $household !== null;
                         <li class="nav-item"><a class="nav-link <?= is_route('dashboard') ? 'active' : '' ?>" href="<?= e(route('dashboard')) ?>"><i class="bi bi-speedometer2 me-1" aria-hidden="true"></i>Início</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('transactions.*') ? 'active' : '' ?>" href="<?= e(route('transactions.index')) ?>"><i class="bi bi-receipt me-1" aria-hidden="true"></i>Lançamentos</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('budgets.*') ? 'active' : '' ?>" href="<?= e(route('budgets.index')) ?>"><i class="bi bi-pie-chart me-1" aria-hidden="true"></i>Orçamento</a></li>
+                        <li class="nav-item"><a class="nav-link <?= is_route('reports.*') ? 'active' : '' ?>" href="<?= e(route('reports.index')) ?>"><i class="bi bi-bar-chart-line me-1" aria-hidden="true"></i>Relatórios</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('accounts.*') ? 'active' : '' ?>" href="<?= e(route('accounts.index')) ?>"><i class="bi bi-wallet2 me-1" aria-hidden="true"></i>Contas</a></li>
                         <li class="nav-item"><a class="nav-link <?= is_route('family.*') ? 'active' : '' ?>" href="<?= e(route('family.index')) ?>"><i class="bi bi-people me-1" aria-hidden="true"></i><?= ($household['type'] ?? '') === 'family' ? 'Família' : 'Meu lar' ?></a></li>
                         <li class="nav-item dropdown">

@@ -32,7 +32,7 @@ cofre/                      ← raiz do projeto (= public_html/cofre no cPanel)
 ├── cron/run.php            ← runner do cron (linha de comando ou URL protegida por token)
 ├── sql/schema.sql          ← esquema completo, idempotente
 ├── sql/seed.sql            ← categorias pt-BR + lar de teste (ver §5)
-├── vendor/                 ← bibliotecas vendorizadas (Web Push, fase 7)
+├── vendor/                 ← bibliotecas PHP vendorizadas (Web Push, fase 7); as de navegador ficam em public/assets/vendor
 ├── storage/                ← logs, cache (importações temporárias), uploads (comprovantes), exports, backups, sessions (nunca servida)
 ├── legal/                  ← Política de Privacidade e Termos versionados (fase 3)
 ├── tests/run.php           ← testes (php tests/run.php)
@@ -165,6 +165,13 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Simulador "e se"** (`/simulador`): cortes por categoria (limitados à média atual) e cancelamento de assinaturas → sobra mensal nova, economia acumulada em 6/12 meses, meses de reserva cobertos (reserva = saldo de poupança + investimentos ÷ gastos essenciais) e impacto na primeira meta ativa.
 - **Migração**: instalações anteriores à fase 5 precisam da `sql/migrations/003_fase5_aportes_de_meta.sql` (tabela `goal_contributions`), aplicada por `/sistema/migrar?token=CRON_TOKEN` ou pelo phpMyAdmin.
 
+### 3.15 Painel e relatórios (fase 6)
+- **Painel** (`/painel?mes=AAAA-MM&membro=id`): os 11 indicadores do §6.4 — saldo do mês (pagos + pendentes) e **projetado** (inclui agendados), receitas × despesas em 12 meses, despesas por categoria e por membro, contas a vencer em 7 dias (atrasada / hoje / em breve), os 5 orçamentos mais perto de estourar, **taxa de poupança** e **idade do dinheiro** (saldo líquido em conta corrente/dinheiro/poupança ÷ gasto diário médio dos últimos 90 dias), gasto supérfluo, metas e plano, radar de assinaturas, próximos eventos previstos e o **score de saúde financeira**. Filtro por mês e, em lar familiar, por membro.
+- **Score (0–100)**, com a explicação de cada parcela na tela: taxa de poupança (25 pontos aos 20 %), orçamentos sem estouro (20; sem limites definidos vale 10), contas em dia (15, −5 por atrasada), reserva de emergência (20 com 6 meses de gastos essenciais cobertos), gasto supérfluo (10 até 30 % das despesas, zero a partir de 60 %) e assinaturas sem alerta (10, −5 por alerta). Níveis: Ótima ≥ 80, Boa ≥ 60, Atenção ≥ 40, Crítica abaixo.
+- **Gráficos**: Chart.js 4.4.4 **vendorizado** em `public/assets/vendor/chart.umd.js` (sem CDN; a licença MIT está ao lado). Os dados vão embutidos na página em `<script type="application/json">` com nonce, respeitando a CSP. Cores: azul para receitas e laranja para despesas (par validado para daltonismo em tema claro e escuro); barras de categoria em um só matiz; barras de membro na cor do próprio membro. Todo gráfico tem legenda ou rótulo de eixo e uma tabela alternativa ("Ver como tabela").
+- **Relatórios** (`/relatorios`): mensal por categoria (pai › filha, % do total, comparação com o mês anterior e com o mesmo mês do ano passado, ranking "onde o dinheiro mais cresceu"), anual (12 meses, melhor e pior mês, taxa de poupança), por membro, por categoria (evolução em 12 meses + lançamentos do mês) e por conta/cartão (extrato com saldo inicial e final; para cartões, a **fatura** pelo dia de fechamento, com vencimento). Todos aceitam `?formato=csv` (UTF-8 com BOM e `;`, abre direto no Excel pt-BR) e `?formato=pdf`.
+- **PDF sem biblioteca**: `app/Core/Pdf.php` gera PDF 1.4 com Helvetica/WinAnsi (acentos ok), títulos, parágrafos e tabelas com cabeçalho repetido a cada página. Não faz imagens nem fontes embutidas: é o "PDF simples" do §6.5. Cada exportação fica no log de auditoria (`report.exported`).
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -190,6 +197,9 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Cursor `next_run_date` recalculado pela própria regra** a cada geração (não confia no valor gravado), o que torna edições de dia/frequência seguras.
 - **Radar sem tabela própria**: assinaturas são regras com `is_subscription`; a detecção nos lançamentos é calculada na hora (últimos 6 meses) porque o volume por lar é pequeno e evita sincronizar duas fontes.
 - **Orçamento mede pagos + pendentes**: o pendente já é compromisso do mês; o agendado (gerado por recorrência) não entra para não "estourar" orçamentos antes do gasto acontecer.
+- **Chart.js vendorizado em vez de CDN**: o painel é a tela mais usada e não pode depender de um terceiro fora do ar; o arquivo tem 200 KB e é servido com cache pelo Apache. Os demais assets (Bootstrap, ícones) continuam no jsDelivr com SRI.
+- **Idade do dinheiro simplificada**: em vez do cálculo FIFO do YNAB (que exige histórico completo por real), usamos saldo líquido ÷ gasto diário médio de 90 dias — o mesmo significado prático ("quantos dias você aguenta sem receita") com dados que o app já tem.
+- **Relatórios calculados na hora**, sem tabelas de agregados: o volume de um lar é pequeno (milhares de linhas por ano) e os índices por lar + data resolvem; evita jobs de recomputação no cron do cPanel.
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
@@ -206,6 +216,7 @@ bash tools/smoke-fase2.sh              # teste de ponta a ponta da fase 2 (banco
 bash tools/smoke-fase3.sh              # teste de ponta a ponta da fase 3 (depois do da fase 2; ADMIN_EMAILS=ana@exemplo.test)
 bash tools/smoke-fase4.sh              # teste de ponta a ponta da fase 4 (banco limpo com seed; usa o lar "Família Spina")
 bash tools/smoke-fase5.sh              # teste de ponta a ponta da fase 5 (banco limpo com seed)
+bash tools/smoke-fase6.sh              # teste de ponta a ponta da fase 6 (banco limpo com seed)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
@@ -215,8 +226,8 @@ Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://12
 2. ✅ Contas e segurança: cadastro, confirmação de e-mail, login, 2FA, lembrar-me, rate limit, sessões, auditoria, onboarding, convites e papéis
 3. ✅ LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
 4. ✅ Cadastros financeiros: contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
-5. ✅ Recorrências, radar de assinaturas, orçamento (projeção, essencial × supérfluo, 50/30/20), metas com aportes, plano de ação (estimado × realizado) e simulador "e se" (esta entrega)
-6. Dashboard, relatórios, exportações
+5. ✅ Recorrências, radar de assinaturas, orçamento (projeção, essencial × supérfluo, 50/30/20), metas com aportes, plano de ação (estimado × realizado) e simulador "e se"
+6. ✅ Painel com os 11 indicadores e gráficos, relatórios (mensal, anual, membro, categoria, conta/fatura) com CSV e PDF (esta entrega)
 7. Notificações: configuração, PWA/Web Push, sons e cores, scheduler, central, cron, backup
 8. Testes, revisão final de segurança/LGPD, polimento mobile
 

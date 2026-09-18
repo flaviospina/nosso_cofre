@@ -121,6 +121,7 @@ final class AuditService
             'savings_action.updated'   => 'Ação de economia alterada',
             'savings_action.status'    => 'Situação da ação de economia',
             'savings_action.deleted'   => 'Ação de economia removida',
+            'report.exported'          => 'Relatório exportado',
             'user.email_change_requested' => 'Troca de e-mail solicitada',
             'user.email_changed'       => 'E-mail alterado',
             'user.data_exported'       => 'Dados exportados',

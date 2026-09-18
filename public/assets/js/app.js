@@ -383,6 +383,11 @@
         kindInputs.forEach(function (i) { i.addEventListener('change', syncKind); }); syncKind();
     }
 
+    // Selects que enviam o formulário ao mudar (filtros do painel e dos relatórios)
+    document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
+        sel.addEventListener('change', function () { if (sel.form) { sel.form.submit(); } });
+    });
+
     // --- Service worker (PWA) ---
     if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
         window.addEventListener('load', function () {

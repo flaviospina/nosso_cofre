@@ -123,3 +123,21 @@ html, body { min-height: 100%; }
 .nc-import-table .form-select-sm { min-width: 11rem; }
 .nc-stat { border-radius: 1rem; }
 .nc-stat .fs-4 { line-height: 1.1; }
+
+/* --- Fase 6: painel e relatórios --- */
+.nc-chart { position: relative; height: 240px; }
+.nc-chart-sm { height: 200px; }
+.nc-chart-lg { height: 300px; }
+.nc-score { width: 5.5rem; height: 5.5rem; border-radius: 999px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; border: .45rem solid var(--bs-border-color); font-weight: 700; font-size: 1.6rem; line-height: 1; }
+.nc-score small { font-size: .65rem; font-weight: 500; }
+.nc-score-green { border-color: var(--nc-income); color: var(--nc-income); }
+.nc-score-yellow { border-color: var(--nc-due); color: var(--nc-due); }
+.nc-score-red { border-color: var(--nc-late); color: var(--nc-late); }
+.nc-kpi .fs-4 { line-height: 1.15; }
+.nc-report-table td, .nc-report-table th { white-space: nowrap; }
+.nc-report-table .nc-child td:first-child { padding-left: 1.75rem; }
+@media print {
+    .nc-header, .nc-footer, .nc-no-print, .btn, form { display: none !important; }
+    .nc-main { max-width: none; }
+    .card { border: 0; box-shadow: none; }
+}

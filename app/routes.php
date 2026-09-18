@@ -19,6 +19,7 @@ use App\Controllers\BudgetController;
 use App\Controllers\GoalController;
 use App\Controllers\SavingsActionController;
 use App\Controllers\SimulatorController;
+use App\Controllers\ReportController;
 use App\Controllers\InvitationController;
 use App\Controllers\LegalController;
 use App\Controllers\OnboardingController;
@@ -208,5 +209,13 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/plano/{id:\d+}/excluir', [SavingsActionController::class, 'destroy'], 'savings.destroy');
 
         $r->get('/simulador', [SimulatorController::class, 'index'], 'simulator.index');
+
+        // Fase 6: relatórios (tela, CSV, PDF)
+        $r->get('/relatorios', [ReportController::class, 'index'], 'reports.index');
+        $r->get('/relatorios/mensal', [ReportController::class, 'monthly'], 'reports.monthly');
+        $r->get('/relatorios/anual', [ReportController::class, 'annual'], 'reports.annual');
+        $r->get('/relatorios/membros', [ReportController::class, 'members'], 'reports.members');
+        $r->get('/relatorios/categoria', [ReportController::class, 'category'], 'reports.category');
+        $r->get('/relatorios/conta', [ReportController::class, 'account'], 'reports.account');
     });
 });

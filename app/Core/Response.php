@@ -69,6 +69,18 @@ final class Response
         return $response;
     }
 
+    /** Download de conteúdo gerado na hora (CSV, PDF). */
+    public static function download(string $content, string $downloadName, string $mime = 'application/octet-stream'): self
+    {
+        $safeName = preg_replace('/[^\w\.\-]+/u', '_', $downloadName) ?: 'arquivo';
+        return new self($content, 200, [
+            'Content-Type'        => $mime,
+            'Content-Length'      => (string) strlen($content),
+            'Content-Disposition' => sprintf('attachment; filename="%s"; filename*=UTF-8\'\'%s', $safeName, rawurlencode($downloadName)),
+            'Cache-Control'       => 'private, no-store',
+        ]);
+    }
+
     public function withHeader(string $name, string $value): self
     {
         $this->headers[$name] = $value;
