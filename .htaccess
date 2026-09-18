@@ -1,15 +1,15 @@
-# Nosso Cofre — .htaccess da RAIZ do projeto (ex.: public_html/nossocofre/.htaccess)
+# Nosso Cofre - .htaccess da RAIZ do projeto (ex.: public_html/nossocofre/.htaccess)
 # Usa SOMENTE mod_rewrite (categoria FileInfo do AllowOverride), que todo plano compartilhado permite.
-# Tudo é reescrito para dentro de public/, a única pasta realmente servida.
+# Tudo e reescrito para dentro de public/, a unica pasta realmente servida.
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Arquivos de configuração, banco, logs e documentação nunca são servidos
+    # Arquivos de configuracao, banco, logs e documentacao nunca sao servidos
     RewriteRule (^|/)\.env - [F,L]
     RewriteRule (^|/)\.git - [F,L]
     RewriteRule \.(sql|md|log|lock|ini|bak|dist)$ - [F,L]
 
-    # O que já aponta para public/ segue em frente (evita public/public/... e loops)
+    # O que ja aponta para public/ segue em frente (evita public/public/... e loops)
     RewriteRule ^public/ - [L]
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>

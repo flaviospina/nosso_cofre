@@ -1,16 +1,16 @@
-# Nosso Cofre — .htaccess da pasta pública (front controller)
+# Nosso Cofre - .htaccess da pasta publica (front controller)
 # Usa SOMENTE diretivas da categoria FileInfo (mod_rewrite, mod_headers, AddType).
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Nunca servir arquivos ocultos ou de configuração que caiam aqui por engano
+    # Nunca servir arquivos ocultos ou de configuracao que caiam aqui por engano
     RewriteRule (^|/)\.(env|git|htaccess) - [F,L]
     RewriteRule \.(sql|md|log|lock|ini|bak)$ - [F,L]
 
-    # Raiz da pasta → index.php (não depende de DirectoryIndex)
+    # Raiz da pasta  index.php (nao depende de DirectoryIndex)
     RewriteRule ^$ index.php [L]
 
-    # Arquivos e pastas reais (assets, manifest, sw.js) são servidos diretamente; o resto vai ao roteador
+    # Arquivos e pastas reais (assets, manifest, sw.js) sao servidos diretamente; o resto vai ao roteador
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [L]
@@ -24,7 +24,7 @@
     AddType audio/ogg .ogg
 </IfModule>
 
-# Cabeçalhos de segurança para arquivos estáticos (o PHP repete os mesmos nas páginas dinâmicas)
+# Cabecalhos de seguranca para arquivos estaticos (o PHP repete os mesmos nas paginas dinamicas)
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "DENY"

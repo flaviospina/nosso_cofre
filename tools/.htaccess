@@ -1,5 +1,5 @@
-# Pasta interna do Nosso Cofre — nunca servida pelo Apache.
-# Só mod_rewrite (FileInfo): funciona em qualquer plano compartilhado sem causar erro 500.
+# Pasta interna do Nosso Cofre - nunca servida pelo Apache.
+# So mod_rewrite (FileInfo): funciona em qualquer plano compartilhado sem causar erro 500.
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^ - [F,L]
