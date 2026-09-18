@@ -17,12 +17,13 @@ use DateTimeImmutable;
 final class ReportService
 {
     /** @return array<string,mixed> */
-    public static function monthly(int $householdId, string $monthStart, ?int $memberId): array
+    public static function monthly(int $householdId, string $monthStart, ?int $memberId, ?int $viewerId = null): array
     {
         $month = new DateTimeImmutable($monthStart);
-        $current = self::byCategory($householdId, $month, $memberId);
-        $previous = self::byCategory($householdId, $month->modify('-1 month'), $memberId);
-        $lastYear = self::byCategory($householdId, $month->modify('-1 year'), $memberId);
+        $viewer = TransactionPolicy::viewer($viewerId);
+        $current = self::byCategory($householdId, $month, $memberId, $viewer);
+        $previous = self::byCategory($householdId, $month->modify('-1 month'), $memberId, $viewer);
+        $lastYear = self::byCategory($householdId, $month->modify('-1 year'), $memberId, $viewer);
         $parents = [];
         foreach (['expense', 'income'] as $kind) {
             foreach ($current[$kind] as $key => $row) {
@@ -141,9 +142,11 @@ final class ReportService
 
     /** Evolução de uma categoria (pai inclui filhas) nos últimos N meses + lançamentos do mês escolhido. */
     /** @return array<string,mixed> */
-    public static function category(int $householdId, int $categoryId, string $monthStart, int $months = 12): array
+    public static function category(int $householdId, int $categoryId, string $monthStart, int $months = 12, ?int $viewerId = null): array
     {
         $month = new DateTimeImmutable($monthStart);
+        // Lançamentos privados (ou de quem não compartilha) de outros membros ficam fora: listá-los aqui revelaria a categoria
+        [$visibleSql, $visibleParams] = TransactionPolicy::visibleSql('t', TransactionPolicy::viewer($viewerId), $householdId);
         $cat = Category::forHousehold($householdId)->map()[$categoryId] ?? null;
         $rows = [];
         for ($i = $months - 1; $i >= 0; $i--) {
@@ -153,8 +156,8 @@ final class ReportService
         foreach (Database::select(
             "SELECT DATE_FORMAT(t.date, '%Y-%m') AS ym, SUM(t.amount) AS total FROM transactions t
               WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.status <> 'scheduled' AND t.type <> 'transfer' AND t.date BETWEEN ? AND ?
-                AND (t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?)) GROUP BY ym",
-            [$householdId, $month->modify('-' . ($months - 1) . ' months')->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d'), $categoryId, $categoryId]
+                AND (t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?)) AND {$visibleSql} GROUP BY ym",
+            array_merge([$householdId, $month->modify('-' . ($months - 1) . ' months')->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d'), $categoryId, $categoryId], $visibleParams)
         ) as $r) {
             if (isset($rows[$r['ym']])) {
                 $rows[$r['ym']]['amount'] = round((float) $r['total'], 2);
@@ -163,8 +166,8 @@ final class ReportService
         $model = new Transaction();
         $transactions = array_map(static fn(array $r): array => TransactionPolicy::mask($model->castRow($r)), Database::select(
             'SELECT t.*, a.name AS account_name, u.name AS responsible_name, c.name AS category_name FROM transactions t JOIN accounts a ON a.id = t.account_id LEFT JOIN users u ON u.id = t.responsible_user_id LEFT JOIN categories c ON c.id = t.category_id
-              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.status <> \'scheduled\' AND t.date BETWEEN ? AND ? AND (t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?)) ORDER BY t.date DESC, t.id DESC LIMIT 200',
-            [$householdId, $month->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d'), $categoryId, $categoryId]
+              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.status <> \'scheduled\' AND t.date BETWEEN ? AND ? AND (t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?)) AND ' . $visibleSql . ' ORDER BY t.date DESC, t.id DESC LIMIT 200',
+            array_merge([$householdId, $month->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d'), $categoryId, $categoryId], $visibleParams)
         ));
         $values = array_column($rows, 'amount');
         $nonZero = array_filter($values, static fn(float $v): bool => $v > 0);
@@ -289,7 +292,7 @@ final class ReportService
         $out = "\xEF\xBB\xBF";
         $line = static function (array $cells): string {
             return implode(';', array_map(static function (string $c): string {
-                $c = trim($c);
+                $c = ExportService::csvSafe(trim($c));
                 return preg_match('/[;"\r\n]/', $c) ? '"' . str_replace('"', '""', $c) . '"' : $c;
             }, $cells)) . "\r\n";
         };
@@ -303,14 +306,26 @@ final class ReportService
     // --- internos ---
 
     /** Gastos e receitas do mês agrupados por categoria pai, com filhas. @return array{expense:array<string,array<string,mixed>>,income:array<string,array<string,mixed>>} */
-    private static function byCategory(int $householdId, DateTimeImmutable $month, ?int $memberId): array
+    private static function byCategory(int $householdId, DateTimeImmutable $month, ?int $memberId, int $viewerId = 0): array
     {
         $memberSql = $memberId !== null ? ' AND t.responsible_user_id = ?' : '';
         $params = [$householdId, $month->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d')];
         if ($memberId !== null) {
             $params[] = $memberId;
         }
+        // Privados de outros membros entram no total, mas agrupados em "Lançamentos privados" (a categoria não é revelada)
+        [$hiddenSql, $hiddenParams] = TransactionPolicy::hiddenSql('t', $viewerId, $householdId);
+        $memberSql .= " AND NOT {$hiddenSql}";
+        $params = array_merge($params, $hiddenParams);
         $out = ['expense' => [], 'income' => []];
+        foreach (Database::select(
+            "SELECT t.type, SUM(t.amount) AS total FROM transactions t
+              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.status <> 'scheduled' AND t.type IN ('income','expense') AND t.date BETWEEN ? AND ?"
+                . ($memberId !== null ? ' AND t.responsible_user_id = ?' : '') . " AND {$hiddenSql} GROUP BY t.type",
+            array_merge([$householdId, $month->format('Y-m-01'), $month->modify('last day of this month')->format('Y-m-d')], $memberId !== null ? [$memberId] : [], $hiddenParams)
+        ) as $r) {
+            $out[$r['type']]['0|Lançamentos privados'] = ['id' => null, 'name' => 'Lançamentos privados', 'color' => '#94a3b8', 'amount' => round((float) $r['total'], 2), 'children' => []];
+        }
         foreach (Database::select(
             "SELECT t.type, COALESCE(p.id, c.id) AS parent_id, COALESCE(p.name, c.name, 'Sem categoria') AS parent_name, COALESCE(p.color, c.color) AS color,
                     CASE WHEN p.id IS NULL THEN NULL ELSE c.name END AS child_name, SUM(t.amount) AS total

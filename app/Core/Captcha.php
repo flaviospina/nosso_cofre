@@ -54,10 +54,18 @@ final class Captcha
         if ((int) $expires < time()) {
             return false;
         }
+        $used = (array) Session::get('_captcha_used', []);
+        if (in_array($nonce, $used, true)) {
+            return false; // cada desafio vale uma resposta
+        }
         $given = trim($answer);
         if (!preg_match('/^-?\d{1,3}$/', $given)) {
             return false;
         }
-        return hash_equals($answerHash, hash('sha256', $nonce . ':' . (int) $given));
+        if (!hash_equals($answerHash, hash('sha256', $nonce . ':' . (int) $given))) {
+            return false;
+        }
+        Session::set('_captcha_used', array_slice(array_merge($used, [$nonce]), -30));
+        return true;
     }
 }

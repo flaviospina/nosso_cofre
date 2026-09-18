@@ -50,7 +50,8 @@ final class Mailer
         }
         try {
             self::deliver((string) $row['to_email'], $row['to_name'] !== null ? (string) $row['to_name'] : null, (string) $row['subject'], (string) $row['body_html'], (string) $row['body_text']);
-            Database::execute('UPDATE email_outbox SET status = ?, attempts = attempts + 1, sent_at = ?, last_error = NULL WHERE id = ?', ['sent', gmdate('Y-m-d H:i:s'), $outboxId]);
+            // Enviado: o corpo (que pode conter links com token) não fica guardado
+            Database::execute("UPDATE email_outbox SET status = ?, attempts = attempts + 1, sent_at = ?, last_error = NULL, body_html = '', body_text = NULL WHERE id = ?", ['sent', gmdate('Y-m-d H:i:s'), $outboxId]);
             return true;
         } catch (\Throwable $e) {
             $attempts = (int) $row['attempts'] + 1;

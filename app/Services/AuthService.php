@@ -60,12 +60,33 @@ final class AuthService
         return $user;
     }
 
+    /** Alguém tentou se cadastrar com um e-mail que já tem conta: avisa o dono (com link de recuperação) em vez de expor isso na tela. */
+    /** @param array<string,mixed> $user */
+    public static function notifyExistingAccount(array $user, Request $request): void
+    {
+        RateLimiter::record('register', $request->ip(), (string) $user['email'], true, $request->userAgent());
+        Logger::security('Cadastro com e-mail já existente', ['email' => $user['email'], 'ip' => $request->ip()]);
+        if (($user['status'] ?? '') !== 'active') {
+            return;
+        }
+        if (empty($user['email_verified_at'])) {
+            self::sendVerification($user); // conta criada e nunca confirmada: reenvia o link de confirmação
+            return;
+        }
+        Mailer::send((string) $user['email'], (string) $user['name'], 'Você já tem uma conta no Nosso Cofre', 'account-exists', [
+            'name'     => $user['name'],
+            'loginUrl' => absolute_url('/entrar'),
+            'resetUrl' => absolute_url('/esqueci-senha'),
+        ], 'security', (int) $user['id']);
+    }
+
     /** Gera token de uso único (24 h) e envia o e-mail de confirmação. */
     /** @param array<string,mixed> $user */
     public static function sendVerification(array $user): void
     {
         $token = Crypto::randomUrlToken(32);
-        Database::execute('UPDATE email_verifications SET verified_at = verified_at WHERE user_id = ?', [(int) $user['id']]);
+        // Um pedido novo invalida os links anteriores ainda não usados
+        Database::execute('UPDATE email_verifications SET expires_at = ? WHERE user_id = ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s'), (int) $user['id']]);
         Database::insert('email_verifications', [
             'user_id'    => (int) $user['id'],
             'email'      => (string) $user['email'],
@@ -86,6 +107,7 @@ final class AuthService
     {
         $newEmail = mb_strtolower(trim($newEmail));
         $token = Crypto::randomUrlToken(32);
+        Database::execute('UPDATE email_verifications SET expires_at = ? WHERE user_id = ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s'), (int) $user['id']]);
         Database::insert('email_verifications', [
             'user_id'    => (int) $user['id'],
             'email'      => $newEmail,
@@ -156,7 +178,7 @@ final class AuthService
         }
         $user = (new User())->findByEmail($email);
         // Tempo constante aproximado: verifica um hash falso quando o usuário não existe
-        $hash = $user['password_hash'] ?? '$2y$12$C6UzMDM.H6dfI/f/IKcEeO4JcS.9UgN2R/4mJq6mQ0pV9i9uYw0uK';
+        $hash = ($user['password_hash'] ?? '') !== '' ? (string) $user['password_hash'] : Auth::dummyHash();
         $valid = Auth::verifyPassword($password, (string) $hash) && $user !== null;
         if (!$valid || in_array($user['status'] ?? '', ['anonymized', 'blocked'], true)) {
             RateLimiter::record('login', $request->ip(), $email, false, $request->userAgent());
@@ -235,6 +257,7 @@ final class AuthService
             return;
         }
         $token = Crypto::randomUrlToken(32);
+        Database::execute('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL', [gmdate('Y-m-d H:i:s'), (int) $user['id']]);
         Database::insert('password_resets', [
             'user_id'    => (int) $user['id'],
             'token_hash' => Crypto::hashToken($token),
@@ -259,7 +282,8 @@ final class AuthService
         if ($row === null) {
             return null;
         }
-        return (new User())->find((int) $row['user_id']);
+        $user = (new User())->find((int) $row['user_id']);
+        return $user !== null && ($user['status'] ?? '') === 'active' ? $user : null;
     }
 
     public static function resetPassword(string $token, string $newPassword): bool
@@ -272,6 +296,10 @@ final class AuthService
             return false;
         }
         $userId = (int) $row['user_id'];
+        $user = (new User())->find($userId);
+        if ($user === null || ($user['status'] ?? '') !== 'active') {
+            return false;
+        }
         Database::transaction(static function () use ($row, $userId, $newPassword): void {
             Database::execute('UPDATE password_resets SET used_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s'), (int) $row['id']]);
             (new User())->update($userId, ['password_hash' => Auth::hashPassword($newPassword)]);

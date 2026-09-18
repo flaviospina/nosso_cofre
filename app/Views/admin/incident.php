@@ -6,7 +6,7 @@
     <a class="small" href="<?= e(route('admin.incidents')) ?>">← Incidentes</a>
     <h1 class="h3 mt-1 mb-2">#<?= (int) $incident['id'] ?> <?= e($incident['title']) ?></h1>
     <div class="card nc-card mb-3"><div class="card-body">
-        <p style="white-space:pre-wrap" class="mb-2"><?= e($incident['description']) ?></p>
+        <p class="nc-prewrap mb-2"><?= e($incident['description']) ?></p>
         <dl class="row small mb-0">
             <dt class="col-sm-3">Ocorrido em</dt><dd class="col-sm-9"><?= e(datetime_br($incident['occurred_at'])) ?: '—' ?></dd>
             <dt class="col-sm-3">Detectado em</dt><dd class="col-sm-9"><?= e(datetime_br($incident['detected_at'])) ?></dd>

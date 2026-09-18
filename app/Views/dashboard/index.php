@@ -105,7 +105,7 @@ $urgencyClass = ['late' => 'nc-late', 'today' => 'nc-due', 'soon' => 'text-body-
             </div>
             <ul class="list-unstyled small mt-2 mb-0">
                 <?php foreach ($score['items'] as $it): ?>
-                    <li class="d-flex gap-2 py-1 border-top"><span class="text-nowrap fw-semibold" data-color="<?= $it['points'] >= $it['max'] * 0.7 ? '#15803d' : ($it['points'] >= $it['max'] * 0.4 ? '#ca8a04' : '#b91c1c') ?>"><?= (int) $it['points'] ?>/<?= (int) $it['max'] ?></span><span><strong><?= e($it['label']) ?>:</strong> <?= e($it['detail']) ?></span></li>
+                    <li class="d-flex gap-2 py-1 border-top"><span class="text-nowrap fw-semibold <?= $it['points'] >= $it['max'] * 0.7 ? 'nc-income' : ($it['points'] >= $it['max'] * 0.4 ? 'nc-due' : 'nc-late') ?>"><?= (int) $it['points'] ?>/<?= (int) $it['max'] ?></span><span><strong><?= e($it['label']) ?>:</strong> <?= e($it['detail']) ?></span></li>
                 <?php endforeach; ?>
             </ul>
         </div></div>

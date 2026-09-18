@@ -17,6 +17,7 @@ use App\Models\Transaction;
 use App\Services\AccountService;
 use App\Services\AuditService;
 use App\Services\RecurrenceService;
+use App\Services\TransactionPolicy;
 use App\Services\TransactionService;
 
 /** Recorrências (/recorrencias): regras, ocorrências a confirmar, débito automático e eventos previstos. */
@@ -32,7 +33,7 @@ final class RecurrenceController extends Controller
         return $this->view('recurrences/index', [
             'title'      => 'Recorrências',
             'rules'      => $rules,
-            'pending'    => array_map(static fn(array $r): array => $model->castRow($r), RecurrenceService::pendingOccurrences($householdId, $today, 7)),
+            'pending'    => array_map(static fn(array $r): array => TransactionPolicy::mask($model->castRow($r)), RecurrenceService::pendingOccurrences($householdId, $today, 7)),
             'autoDebit'  => RecurrenceService::autoDebitStats($householdId),
             'events'     => RecurrenceService::upcomingEvents($householdId, $today),
             'categories' => (new Category())->map(),
@@ -151,6 +152,9 @@ final class RecurrenceController extends Controller
         if ($tx['recurring_id'] === null) {
             throw new HttpException(422, 'Este lançamento não vem de uma recorrência.');
         }
+        if (!TransactionPolicy::canEdit($tx)) {
+            throw new HttpException(403, 'Você não pode alterar este lançamento.');
+        }
         $fields = [];
         if (!empty($data['amount']) && (float) $data['amount'] > 0) {
             $fields['amount'] = $data['amount'];
@@ -173,6 +177,9 @@ final class RecurrenceController extends Controller
         $tx = (new Transaction())->findOrFail((int) $txId);
         if ($tx['recurring_id'] === null) {
             throw new HttpException(422, 'Este lançamento não vem de uma recorrência.');
+        }
+        if (!TransactionPolicy::canEdit($tx)) {
+            throw new HttpException(403, 'Você não pode alterar este lançamento.');
         }
         TransactionService::trash((int) $txId);
         $this->flash('success', 'Ocorrência pulada.');

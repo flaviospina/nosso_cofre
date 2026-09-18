@@ -133,7 +133,8 @@ final class SystemController extends Controller
             'title'  => 'Saúde da instalação',
             'checks' => $checks,
             'allOk'  => $allOk,
-            'debug'  => (bool) Config::get('app.debug'),
+            'debug'  => (bool) Config::get('app.debug') || \App\Core\Middleware\AdminMiddleware::isAdmin()
+                || (strlen((string) Config::get('cron.token', '')) >= 32 && hash_equals((string) Config::get('cron.token', ''), (string) $this->request->query('token', ''))),
         ], 'layouts/base', $allOk ? 200 : 503);
     }
 
@@ -198,7 +199,8 @@ final class SystemController extends Controller
     /** Página mostrada pelo service worker quando não há conexão. */
     public function offline(): Response
     {
-        return $this->view('system/offline', ['title' => 'Sem conexão'], 'layouts/base');
+        // O service worker guarda esta página em cache: ela não pode carregar nome, avisos ou token CSRF do usuário
+        return $this->view('system/offline', ['title' => 'Sem conexão', 'guestLayout' => true], 'layouts/base');
     }
 
     /** /cron/run?token=... — mesmo runner do cron/run.php, para o cron do cPanel por URL. */

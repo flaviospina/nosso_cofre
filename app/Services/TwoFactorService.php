@@ -55,7 +55,7 @@ final class TwoFactorService
         (new User())->update((int) $user['id'], [
             'totp_secret'         => $secret,
             'totp_enabled_at'     => gmdate('Y-m-d H:i:s'),
-            'totp_recovery_codes' => array_map(static fn(string $c): string => Crypto::hashToken(Totp::normalizeRecoveryCode($c)), $codes),
+            'totp_recovery_codes' => array_map(static fn(string $c): string => self::hashRecoveryCode($c), $codes),
             'totp_last_counter'   => $counter,
         ]);
         Session::forget(self::PENDING_KEY);
@@ -89,8 +89,9 @@ final class TwoFactorService
         if ($counter === null) {
             return false;
         }
-        Database::execute('UPDATE users SET totp_last_counter = ? WHERE id = ?', [$counter, (int) $user['id']]);
-        return true;
+        // Atômico: dois pedidos simultâneos com o mesmo código não passam os dois
+        $updated = Database::execute('UPDATE users SET totp_last_counter = ? WHERE id = ? AND (totp_last_counter IS NULL OR totp_last_counter < ?)', [$counter, (int) $user['id'], $counter]);
+        return $updated > 0;
     }
 
     /** Consome um código de recuperação. */
@@ -101,9 +102,10 @@ final class TwoFactorService
         if (!is_array($hashes) || $hashes === []) {
             return false;
         }
-        $given = Crypto::hashToken(Totp::normalizeRecoveryCode($code));
+        $given = self::hashRecoveryCode($code);
+        $legacy = Crypto::hashToken(Totp::normalizeRecoveryCode($code)); // códigos gerados antes da fase 8
         foreach ($hashes as $index => $hash) {
-            if (hash_equals((string) $hash, $given)) {
+            if (hash_equals((string) $hash, $given) || hash_equals((string) $hash, $legacy)) {
                 unset($hashes[$index]);
                 (new User())->update((int) $user['id'], ['totp_recovery_codes' => array_values($hashes)]);
                 AuditService::log('user.2fa_recovery_used', 'user', (int) $user['id'], null, ['remaining' => count($hashes)], (int) $user['id'], null);
@@ -119,10 +121,16 @@ final class TwoFactorService
     {
         $codes = Totp::generateRecoveryCodes();
         (new User())->update((int) $user['id'], [
-            'totp_recovery_codes' => array_map(static fn(string $c): string => Crypto::hashToken(Totp::normalizeRecoveryCode($c)), $codes),
+            'totp_recovery_codes' => array_map(static fn(string $c): string => self::hashRecoveryCode($c), $codes),
         ]);
         AuditService::log('user.2fa_recovery_regenerated', 'user', (int) $user['id']);
         return $codes;
+    }
+
+    /** HMAC com a chave do app: um vazamento do banco não permite quebrar os códigos offline. */
+    public static function hashRecoveryCode(string $code): string
+    {
+        return Crypto::sign('recovery:' . Totp::normalizeRecoveryCode($code));
     }
 
     /** @param array<string,mixed> $user */

@@ -112,6 +112,7 @@ final class Response
     public function send(): void
     {
         if (!headers_sent()) {
+            header_remove('X-Powered-By');
             http_response_code($this->status);
             foreach ($this->securityHeaders() as $name => $value) {
                 header($name . ': ' . $value);
@@ -129,7 +130,7 @@ final class Response
         $nonce = App::nonce();
         $csp = implode('; ', [
             "default-src 'self'",
-            "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net",
+            "script-src 'self' 'nonce-{$nonce}'",
             "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net",
             "font-src 'self' https://cdn.jsdelivr.net data:",
             "img-src 'self' data: blob:",

@@ -37,7 +37,7 @@ final class ReportController extends Controller
     {
         $householdId = (int) Auth::householdId();
         $memberId = $this->memberId();
-        $data = ReportService::monthly($householdId, $this->month(), $memberId);
+        $data = ReportService::monthly($householdId, $this->month(), $memberId, (int) Auth::id());
         return $this->deliver('monthly', 'Relatório mensal', $data['label'] . $this->memberSuffix($memberId), $data, 'reports/monthly', ['memberId' => $memberId]);
     }
 
@@ -68,7 +68,7 @@ final class ReportController extends Controller
         if ($categoryId === 0 || (new Category())->find($categoryId) === null) {
             throw new HttpException(404, 'Categoria não encontrada.');
         }
-        $data = ReportService::category($householdId, $categoryId, $this->month());
+        $data = ReportService::category($householdId, $categoryId, $this->month(), 12, (int) Auth::id());
         return $this->deliver('category', 'Relatório por categoria', ($data['category']['full_name'] ?? '') . ' · 12 meses até ' . $data['label'], $data, 'reports/category', ['categories' => $categories, 'categoryId' => $categoryId]);
     }
 

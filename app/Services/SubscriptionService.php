@@ -72,13 +72,14 @@ final class SubscriptionService
      * @param list<string> $knownNames descrições normalizadas já cadastradas
      * @return list<array<string,mixed>>
      */
-    public static function detectFromTransactions(int $householdId, DateTimeImmutable $today, array $knownNames = []): array
+    public static function detectFromTransactions(int $householdId, DateTimeImmutable $today, array $knownNames = [], ?int $viewerId = null): array
     {
+        [$visibleSql, $visibleParams] = TransactionPolicy::visibleSql('t', TransactionPolicy::viewer($viewerId), $householdId);
         $rows = Database::select(
-            "SELECT description, amount, date, category_id, account_id FROM transactions
-              WHERE household_id = ? AND deleted_at IS NULL AND type = 'expense' AND recurring_id IS NULL AND status <> 'scheduled' AND date >= ?
-              ORDER BY date",
-            [$householdId, $today->modify('-6 months')->format('Y-m-d')]
+            "SELECT t.description, t.amount, t.date, t.category_id, t.account_id FROM transactions t
+              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.recurring_id IS NULL AND t.status <> 'scheduled' AND t.date >= ? AND {$visibleSql}
+              ORDER BY t.date",
+            array_merge([$householdId, $today->modify('-6 months')->format('Y-m-d')], $visibleParams)
         );
         $groups = [];
         foreach ($rows as $row) {

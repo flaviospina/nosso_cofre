@@ -247,6 +247,15 @@ final class Auth
         return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
     }
 
+    /** Hash falso, no MESMO algoritmo/custo dos reais, para o login levar o mesmo tempo quando o e-mail não existe. */
+    public static function dummyHash(): string
+    {
+        if (defined('PASSWORD_ARGON2ID')) {
+            return '$argon2id$v=19$m=65536,t=4,p=1$c3Z5UUl3blptd0tacU1SNg$EUAFVHgGgdurIBDMl4CR4f6yuukUaBGgwAyLpByCWRg';
+        }
+        return '$2y$12$C6UzMDM.H6dfI/f/IKcEeO4JcS.9UgN2R/4mJq6mQ0pV9i9uYw0uK';
+    }
+
     public static function verifyPassword(string $password, string $hash): bool
     {
         return $hash !== '' && password_verify($password, $hash);

@@ -288,7 +288,11 @@ final class PrivacyService
     public static function anonymizeUser(int $userId, string $reason = 'anonymize'): void
     {
         $now = gmdate('Y-m-d H:i:s');
-        Database::transaction(static function () use ($userId, $now): void {
+        $email = (string) (Database::scalar('SELECT email FROM users WHERE id = ?', [$userId]) ?? '');
+        Database::transaction(static function () use ($userId, $now, $email): void {
+            Database::execute('UPDATE invitations SET revoked_at = ? WHERE email = ? AND accepted_at IS NULL AND revoked_at IS NULL', [$now, $email]);
+            Database::execute('DELETE FROM login_attempts WHERE email = ?', [$email]);
+            Database::execute('DELETE FROM email_outbox WHERE user_id = ? OR to_email = ?', [$userId, $email]);
             Database::execute(
                 "UPDATE users SET name = 'Membro removido', email = ?, password_hash = '', totp_secret = NULL, totp_enabled_at = NULL,
                         totp_recovery_codes = NULL, totp_last_counter = NULL, document = NULL, last_login_ip = NULL, status = 'anonymized', updated_at = ?
@@ -305,7 +309,6 @@ final class PrivacyService
             Database::execute('DELETE FROM notification_settings WHERE user_id = ?', [$userId]);
             Database::execute('DELETE FROM password_resets WHERE user_id = ?', [$userId]);
             Database::execute('DELETE FROM email_verifications WHERE user_id = ?', [$userId]);
-            Database::execute('UPDATE invitations SET revoked_at = ? WHERE email = (SELECT email FROM users WHERE id = ?) AND accepted_at IS NULL', [$now, $userId]);
         });
         // Anexos do usuário em storage/uploads
         foreach (glob((string) Config::get('paths.uploads') . '/*/u' . $userId . '-*') ?: [] as $file) {

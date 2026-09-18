@@ -87,7 +87,16 @@ final class Session
         if (!isset($_SESSION['_created_at'])) {
             $_SESSION['_created_at'] = $now;
         }
-        $_SESSION['_last_activity'] = $now;
+        if (!self::isPassiveRequest()) {
+            $_SESSION['_last_activity'] = $now;
+        }
+    }
+
+    /** Requisições automáticas (polling de avisos) não renovam a inatividade. */
+    private static function isPassiveRequest(): bool
+    {
+        $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+        return str_ends_with($path, '/avisos/novos');
     }
 
     public static function setIdleMinutes(int $minutes): void

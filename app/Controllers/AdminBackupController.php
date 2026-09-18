@@ -31,7 +31,8 @@ final class AdminBackupController extends Controller
             AuditService::log('backup.created', 'backup', 0, null, ['file' => basename($path)]);
             $this->flash('success', 'Backup gerado: ' . basename($path));
         } catch (\Throwable $e) {
-            $this->flash('danger', 'Falha ao gerar o backup: ' . $e->getMessage());
+            \App\Core\Logger::error('Falha ao gerar backup: ' . $e->getMessage());
+            $this->flash('danger', 'Falha ao gerar o backup. Veja storage/logs para o detalhe.');
         }
         return $this->redirectRoute('admin.backups');
     }

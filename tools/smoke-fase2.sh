@@ -20,6 +20,7 @@ post() { # post JAR path [dados curl...] → CODE, LOC e corpo em $TMP/body
   curl -s -b "$jar" -c "$jar" -o "$TMP/body" -w "%{http_code}|%{redirect_url}" -X POST "$BASE$path" --data-urlencode "_token=$token" "$@" > "$TMP/meta"
   CODE=$(cut -d'|' -f1 "$TMP/meta"); LOC=$(cut -d'|' -f2 "$TMP/meta" | sed "s#$BASE##"); }
 get() { curl -s -b "$1" -c "$1" -o "$TMP/body" -w "%{http_code}|%{redirect_url}" "$BASE$2" > "$TMP/meta"; CODE=$(cut -d'|' -f1 "$TMP/meta"); LOC=$(cut -d'|' -f2 "$TMP/meta" | sed "s#$BASE##"); }
+sql() { mysql -uroot -N --default-character-set=utf8mb4 nosso_cofre -e "$1"; }
 maillink() { grep -o "$BASE/$1/[A-Za-z0-9_-]*" "$ROOT"/storage/logs/mail-*.log | tail -1 | sed "s#$BASE##"; }
 totp() { php -r 'require "'"$ROOT"'/app/bootstrap.php"; echo App\Core\Totp::code($argv[1]);' "$1"; }
 
@@ -28,7 +29,8 @@ get "$JAR" "/cadastro"; check "GET /cadastro 200" "200" "$CODE"
 post "$JAR" "/cadastro" -d "name=Ana Teste" -d "email=ana@exemplo.test" -d "password=Segura@2026x" -d "password_confirmation=Segura@2026x" -d "terms=1" -d "adult=1"
 check "POST /cadastro redireciona para confirmação" "/confirmar-email" "$LOC"
 post "$JAR" "/cadastro" -d "name=Ana Teste" -d "email=ana@exemplo.test" -d "password=Segura@2026x" -d "password_confirmation=Segura@2026x" -d "terms=1" -d "adult=1"
-get "$JAR" "/cadastro"; contains "e-mail duplicado é recusado" "$(cat "$TMP/body")" "já está em uso"
+check "e-mail duplicado: mesma resposta (sem revelar que existe)" "/confirmar-email" "$LOC"
+check "e-mail duplicado não cria segunda conta" "1" "$(sql "SELECT COUNT(*) FROM users WHERE email='ana@exemplo.test'")"
 post "$JAR" "/cadastro" -d "name=X" -d "email=x@exemplo.test" -d "password=password12345" -d "password_confirmation=password12345" -d "terms=1" -d "adult=1"
 get "$JAR" "/cadastro"; contains "senha comum é recusada" "$(cat "$TMP/body")" "muito comum"
 

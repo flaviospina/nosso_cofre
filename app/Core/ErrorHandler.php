@@ -62,7 +62,7 @@ final class ErrorHandler
             }
             $referer = (string) $request->header('Referer', '');
             $appUrl = (string) Config::get('app.url', '');
-            if ($referer !== '' && $appUrl !== '' && str_starts_with($referer, $appUrl)) {
+            if ($referer !== '' && $appUrl !== '' && ($referer === $appUrl || str_starts_with($referer, rtrim($appUrl, '/') . '/'))) {
                 return Response::redirect($referer);
             }
             return Response::redirect((string) Config::get('app.base_path', '') . $request->path());

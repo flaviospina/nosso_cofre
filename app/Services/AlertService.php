@@ -77,7 +77,7 @@ final class AlertService
     /** Link assinado para ações a partir da notificação (ex.: "marcar como pago") sem depender de sessão + CSRF. */
     public static function actionToken(int $userId, int $transactionId, string $action = 'pay'): string
     {
-        $expires = time() + 7 * 86400;
+        $expires = time() + 48 * 3600; // curto: o link executa uma ação (idempotente) com a sessão do próprio usuário
         $data = "{$action}|{$userId}|{$transactionId}|{$expires}";
         return \App\Core\WebPush::b64url($data . '|' . \App\Core\Crypto::sign($data));
     }

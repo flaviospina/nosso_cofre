@@ -32,7 +32,7 @@ final class DashboardController extends Controller
             }
         }
         RecurrenceService::generate($householdId, $today);
-        $data = InsightsService::dashboard($householdId, $month, $memberId, $today);
+        $data = InsightsService::dashboard($householdId, $month, $memberId, $today, (int) Auth::id());
         $monthDate = new \DateTimeImmutable($month);
         return $this->view('dashboard/index', [
             'title'      => 'Início',

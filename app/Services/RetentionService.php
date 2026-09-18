@@ -29,7 +29,8 @@ final class RetentionService
             + Database::execute('DELETE FROM password_resets WHERE expires_at < ?', [gmdate('Y-m-d H:i:s', $now - 86400)])
             + Database::execute('DELETE FROM email_verifications WHERE expires_at < ? AND verified_at IS NULL', [gmdate('Y-m-d H:i:s', $now - 86400)])
             + Database::execute('UPDATE invitations SET revoked_at = ? WHERE expires_at < ? AND accepted_at IS NULL AND revoked_at IS NULL', [gmdate('Y-m-d H:i:s'), gmdate('Y-m-d H:i:s', $now)]);
-        $result['outbox'] = Database::execute("DELETE FROM email_outbox WHERE status = 'sent' AND created_at < ?", [gmdate('Y-m-d H:i:s', $now - 30 * 86400)]);
+        $result['outbox'] = Database::execute("DELETE FROM email_outbox WHERE status = 'sent' AND created_at < ?", [gmdate('Y-m-d H:i:s', $now - 30 * 86400)])
+            + Database::execute("DELETE FROM email_outbox WHERE status IN ('pending','failed') AND created_at < ?", [gmdate('Y-m-d H:i:s', $now - 7 * 86400)]);
         $result['exclusoes_executadas'] = PrivacyService::executeDueDeletions();
         $result['backups'] = self::purgeBackups((int) Config::get('backup.retention_days', 30));
         return $result;

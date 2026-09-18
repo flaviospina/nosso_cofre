@@ -4,7 +4,7 @@
     --nc-brand-dark: #115e59;
     --nc-income: #15803d;   /* verde: dinheiro entrando */
     --nc-expense: #c2410c;  /* laranja: dinheiro saindo */
-    --nc-due: #ca8a04;      /* amarelo: conta a vencer */
+    --nc-due: #a16207;      /* âmbar: conta a vencer (4,9:1 sobre branco) */
     --nc-late: #b91c1c;     /* vermelho: atrasada / duplicidade */
     --nc-goal: #1d4ed8;     /* azul: meta batida */
     --bs-primary: var(--nc-brand);
@@ -17,6 +17,12 @@
 [data-bs-theme="dark"] {
     --nc-brand: #2dd4bf;
     --nc-brand-dark: #5eead4;
+    /* tons mais claros para contraste ≥ 4,5:1 sobre o fundo escuro */
+    --nc-income: #4ade80;
+    --nc-expense: #fb923c;
+    --nc-due: #fbbf24;
+    --nc-late: #f87171;
+    --nc-goal: #60a5fa;
     --bs-primary: var(--nc-brand);
     --bs-primary-rgb: 45, 212, 191;
     --bs-link-color: var(--nc-brand);
@@ -150,3 +156,19 @@ html, body { min-height: 100%; }
 .nc-swatch input:focus-visible + span { outline: 2px solid var(--nc-brand); outline-offset: 2px; }
 .nc-prewrap { white-space: pre-line; }
 .accordion-button:not(.collapsed) { background: transparent; box-shadow: none; }
+
+/* --- Fase 8: polimento no celular --- */
+@media (max-width: 575.98px) {
+    .card .fs-4 { font-size: 1.2rem; }           /* valores grandes não quebram no meio do número */
+    .card .fs-5 { font-size: 1.05rem; }
+    .nc-tx-list { padding-bottom: 4.5rem; }       /* espaço para o botão flutuante não cobrir a última linha */
+    .nc-tx .nc-cat-dot { width: 1.9rem; height: 1.9rem; font-size: .9rem; }
+    .nc-tx .fw-semibold { font-size: .95rem; }
+    .nc-tx .badge { display: none; }              /* "auto" e etiquetas voltam a aparecer na edição e em telas maiores */
+    .nc-period .btn-link { font-size: .95rem; }
+    .nc-chips { max-height: 12rem; }
+    .nc-swatch span:first-of-type { width: 2rem; height: 2rem; }   /* alvo de toque maior */
+}
+/* Foco visível consistente (teclado) */
+:focus-visible { outline: 2px solid var(--nc-brand); outline-offset: 2px; }
+.btn-check:focus-visible + .btn { outline: 2px solid var(--nc-brand); outline-offset: 2px; }

@@ -8,8 +8,13 @@
     <?= \App\Core\View::partial('account-nav', ['active' => 'account.sessions']) ?>
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h3 mb-0">Sessões ativas</h1>
-        <form method="post" action="<?= e(route('account.sessions.revoke')) ?>" data-once>
+        <form method="post" action="<?= e(route('account.sessions.revoke')) ?>" data-once class="d-flex flex-wrap gap-2 align-items-start">
             <?= csrf_field() ?>
+            <div>
+                <label for="revoke_password" class="visually-hidden">Sua senha</label>
+                <input type="password" class="form-control form-control-sm<?= invalid_class('password') ?>" id="revoke_password" name="password" placeholder="Sua senha" autocomplete="current-password" required>
+                <?= field_error('password') ?>
+            </div>
             <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Encerrar todas as outras</button>
         </form>
     </div>

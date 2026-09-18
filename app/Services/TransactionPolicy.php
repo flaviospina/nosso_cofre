@@ -35,18 +35,75 @@ final class TransactionPolicy
         return !empty($household['settings']['members_can_edit_others']);
     }
 
-    /** @param array<string,mixed> $tx */
-    public static function isPrivateForMe(array $tx): bool
+    /** @var array<int,list<int>> cache por requisição: lar → membros que desligaram "compartilhar com o lar" */
+    private static array $nonSharing = [];
+
+    /**
+     * Membros do lar cujo consentimento "share_with_household" está revogado: todos os lançamentos deles
+     * são tratados como "visível só para mim" pelos demais (LGPD, consentimento granular).
+     * @return list<int>
+     */
+    public static function nonSharingUserIds(int $householdId): array
     {
-        return (int) ($tx['is_private'] ?? 0) === 1 && (int) $tx['created_by'] !== Auth::id();
+        if (!isset(self::$nonSharing[$householdId])) {
+            self::$nonSharing[$householdId] = array_map('intval', array_column(\App\Core\Database::select(
+                "SELECT m.user_id FROM household_members m
+                  WHERE m.household_id = ? AND m.left_at IS NULL AND EXISTS (
+                        SELECT 1 FROM consents c WHERE c.user_id = m.user_id AND c.kind = 'share_with_household' AND c.granted = 0
+                           AND c.id = (SELECT MAX(c2.id) FROM consents c2 WHERE c2.user_id = m.user_id AND c2.kind = 'share_with_household'))",
+                [$householdId]
+            ), 'user_id'));
+        }
+        return self::$nonSharing[$householdId];
+    }
+
+    /** Lançamento privado (ou de membro que não compartilha) de outra pessoa? @param array<string,mixed> $tx */
+    public static function isPrivateForMe(array $tx, ?int $viewerId = null): bool
+    {
+        $viewer = $viewerId ?? Auth::id();
+        if ((int) $tx['created_by'] === $viewer) {
+            return false;
+        }
+        if ((int) ($tx['is_private'] ?? 0) === 1) {
+            return true;
+        }
+        $householdId = (int) ($tx['household_id'] ?? Auth::householdId() ?? 0);
+        return $householdId > 0 && in_array((int) $tx['created_by'], self::nonSharingUserIds($householdId), true);
+    }
+
+    /**
+     * Condição SQL "visível para o usuário" (exclui privados e não compartilhados de outros membros).
+     * @return array{0:string,1:list<mixed>} [sql, params]
+     */
+    public static function visibleSql(string $alias, int $viewerId, int $householdId): array
+    {
+        [$sql, $params] = self::hiddenSql($alias, $viewerId, $householdId);
+        return ['NOT ' . $sql, $params];
+    }
+
+    /**
+     * Condição SQL "oculto para o usuário" (privado ou de membro que não compartilha, criado por outra pessoa).
+     * @return array{0:string,1:list<mixed>} [sql, params]
+     */
+    public static function hiddenSql(string $alias, int $viewerId, int $householdId): array
+    {
+        $ids = self::nonSharingUserIds($householdId);
+        $sql = "({$alias}.created_by <> ? AND ({$alias}.is_private = 1" . ($ids !== [] ? " OR {$alias}.created_by IN (" . implode(',', $ids) . ')' : '') . '))';
+        return [$sql, [$viewerId]];
+    }
+
+    /** Usuário "visualizador" atual: o logado ou, fora de uma sessão (cron), ninguém (0 = só vê o que não é privado). */
+    public static function viewer(?int $viewerId = null): int
+    {
+        return $viewerId ?? (int) (Auth::id() ?? 0);
     }
 
     /** Mascara campos de lançamentos privados de outros membros. */
     /** @param array<string,mixed> $tx
      *  @return array<string,mixed> */
-    public static function mask(array $tx): array
+    public static function mask(array $tx, ?int $viewerId = null): array
     {
-        if (!self::isPrivateForMe($tx)) {
+        if (!self::isPrivateForMe($tx, $viewerId)) {
             return $tx;
         }
         $tx['description'] = 'Lançamento privado';

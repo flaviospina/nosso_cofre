@@ -8,16 +8,20 @@ namespace App\Core;
  * Limite de tentativas com bloqueio progressivo, baseado na tabela login_attempts.
  * Conta falhas recentes por IP e por conta (e-mail); o tempo de bloqueio cresce com a quantidade de falhas.
  *
- *   falhas nos últimos 15 min:  3 → exige CAPTCHA
- *                                5 → bloqueio de 1 min
- *                                8 → 5 min
- *                               12 → 15 min
- *                               20 → 60 min
+ *   falhas nos últimos 60 min:  3 → exige CAPTCHA (por IP ou por e-mail)
+ *                                5 → bloqueio de 1 min   (por IP)
+ *                                8 → 5 min               (por IP)
+ *                               12 → 15 min              (por IP)
+ *                               20 → 60 min              (por IP, ou por e-mail: ataque distribuído)
+ *
+ * Falhas vindas de outros IPs contra o mesmo e-mail não bloqueiam o dono da conta antes de 20 (só exigem CAPTCHA):
+ * evita que um terceiro tranque a conta de alguém só por errar a senha dela de propósito.
  */
 final class RateLimiter
 {
     private const WINDOW_MINUTES = 60;
     public const CAPTCHA_AFTER = 3;
+    public const EMAIL_BLOCK_AFTER = 20;
     private const STEPS = [20 => 60, 12 => 15, 8 => 5, 5 => 1];
 
     /** @return array{failures:int,captcha:bool,blocked_seconds:int} */
@@ -37,8 +41,9 @@ final class RateLimiter
             );
         }
         $failures = max($byIp, $byEmail);
+        $blockFailures = max($byIp, $byEmail >= self::EMAIL_BLOCK_AFTER ? $byEmail : 0);
         $blockedSeconds = 0;
-        if ($failures >= 5) {
+        if ($blockFailures >= 5) {
             $row = Database::selectOne(
                 'SELECT MAX(created_at) AS last_at FROM login_attempts WHERE kind = ? AND succeeded = 0 AND created_at >= ? AND (ip = ? OR email = ?)',
                 [$kind, $since, $ip, $email ?? '']
@@ -46,7 +51,7 @@ final class RateLimiter
             $lastFailure = $row['last_at'] ?? null;
             $minutes = 0;
             foreach (self::STEPS as $threshold => $blockMinutes) {
-                if ($failures >= $threshold) {
+                if ($blockFailures >= $threshold) {
                     $minutes = $blockMinutes;
                     break;
                 }

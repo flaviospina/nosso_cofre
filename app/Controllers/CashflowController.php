@@ -19,7 +19,7 @@ final class CashflowController extends Controller
         $today = new \DateTimeImmutable('today', user_timezone());
         RecurrenceService::generate($householdId, $today);
         $days = max(14, min(120, (int) $this->request->query('dias', 60)));
-        $forecast = CashflowService::forecast($householdId, $today, $days);
+        $forecast = CashflowService::forecast($householdId, $today, $days, Auth::id());
         return $this->view('cashflow/index', [
             'title'    => 'Previsão de caixa',
             'forecast' => $forecast,

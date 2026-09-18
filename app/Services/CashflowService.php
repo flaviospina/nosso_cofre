@@ -15,7 +15,7 @@ use DateTimeImmutable;
 final class CashflowService
 {
     /** @return array{start:float,days:list<array{date:string,in:float,out:float,balance:float,items:list<string>}>,first_negative:?string,lowest:array{date:string,balance:float},safe_surplus:float,next_income:?string} */
-    public static function forecast(int $householdId, DateTimeImmutable $today, int $days = 60): array
+    public static function forecast(int $householdId, DateTimeImmutable $today, int $days = 60, ?int $viewerId = null): array
     {
         $liquid = 0.0;
         foreach (AccountService::withBalances($householdId, true) as $a) {
@@ -27,13 +27,14 @@ final class CashflowService
         $byDay = [];
         // 1) Lançamentos ainda não pagos (pendentes/agendados), inclusive vencidos (contam hoje)
         foreach (Database::select(
-            "SELECT t.date, t.type, t.amount, t.description, a.type AS account_type, ta.type AS transfer_type
+            "SELECT t.date, t.type, t.amount, t.description, t.is_private, t.created_by, t.household_id, a.type AS account_type, ta.type AS transfer_type
                FROM transactions t JOIN accounts a ON a.id = t.account_id LEFT JOIN accounts ta ON ta.id = t.transfer_account_id
               WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.status <> 'paid' AND t.date <= ?",
             [$householdId, $end->format('Y-m-d')]
         ) as $t) {
             $date = max((string) $t['date'], $today->format('Y-m-d'));
-            self::apply($byDay, $date, (string) $t['type'], (float) $t['amount'], (string) $t['description'], (string) $t['account_type'], $t['transfer_type']);
+            $label = $viewerId !== null && TransactionPolicy::isPrivateForMe($t, $viewerId) ? 'Lançamento privado' : (string) $t['description'];
+            self::apply($byDay, $date, (string) $t['type'], (float) $t['amount'], $label, (string) $t['account_type'], $t['transfer_type']);
         }
         // 2) Ocorrências futuras de recorrências ainda não geradas (além do horizonte de geração)
         foreach (Database::select("SELECT r.*, a.type AS account_type FROM recurring_rules r LEFT JOIN accounts a ON a.id = r.account_id WHERE r.household_id = ? AND r.deleted_at IS NULL AND r.is_active = 1", [$householdId]) as $rule) {

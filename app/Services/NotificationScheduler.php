@@ -67,6 +67,7 @@ final class NotificationScheduler
         };
         $minAmount = (float) ($settings['min_amount'] ?? 0);
         $sinceStr = $since->format('Y-m-d H:i:s');
+        [$visibleSql, $visibleParams] = TransactionPolicy::visibleSql('t', $userId, $householdId);
 
         // 1) Dinheiro entrando / 2) saindo: lançamentos criados desde a última execução (pagos ou pendentes, não agendados)
         foreach (['income', 'expense'] as $type) {
@@ -87,7 +88,7 @@ final class NotificationScheduler
             }
             // Débito automático do dia
             if ($type === 'expense') {
-                foreach (Database::select("SELECT id, amount, description FROM transactions WHERE household_id = ? AND deleted_at IS NULL AND type = 'expense' AND auto_debit = 1 AND status <> 'paid' AND date = ? AND amount >= ?", [$householdId, $todayStr, $minAmount]) as $t) {
+                foreach (Database::select("SELECT t.id, t.amount, t.description FROM transactions t WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.auto_debit = 1 AND t.status <> 'paid' AND t.date = ? AND t.amount >= ? AND {$visibleSql}", array_merge([$householdId, $todayStr, $minAmount], $visibleParams)) as $t) {
                     $created += self::emit($userId, $householdId, $settings, 'expense', 'Débito automático hoje: ' . money($t['amount']), $t['description'] . ' sai da conta hoje. Confira o saldo.', "autodebit:tx:{$t['id']}", '/recorrencias', $channel($eff)) ? 1 : 0;
                 }
             }
@@ -98,7 +99,7 @@ final class NotificationScheduler
         if ($eff['enabled']) {
             foreach ((array) ($settings['types']['due']['days'] ?? [3, 0]) as $d) {
                 $target = $today->modify("+{$d} days")->format('Y-m-d');
-                foreach (Database::select("SELECT id, amount, description, date FROM transactions WHERE household_id = ? AND deleted_at IS NULL AND type = 'expense' AND status <> 'paid' AND date = ? AND amount >= ?", [$householdId, $target, $minAmount]) as $t) {
+                foreach (Database::select("SELECT t.id, t.amount, t.description, t.date FROM transactions t WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'paid' AND t.date = ? AND t.amount >= ? AND {$visibleSql}", array_merge([$householdId, $target, $minAmount], $visibleParams)) as $t) {
                     $title = $d === 0 ? 'Vence hoje: ' . $t['description'] : "Vence em {$d} dia(s): " . $t['description'];
                     $created += self::emit($userId, $householdId, $settings, 'due', $title, money($t['amount']) . ' · ' . date_br($t['date']), "due:tx:{$t['id']}:d{$d}", '/lancamentos/' . $t['id'] . '/editar', $channel($eff), ['color' => $d === 0 ? '#b91c1c' : null, 'payload' => ['transaction_id' => (int) $t['id']]]) ? 1 : 0;
                 }
@@ -106,7 +107,7 @@ final class NotificationScheduler
         }
         $eff = $on('overdue');
         if ($eff['enabled']) {
-            foreach (Database::select("SELECT id, amount, description, date FROM transactions WHERE household_id = ? AND deleted_at IS NULL AND type = 'expense' AND status <> 'paid' AND date < ? AND date >= ? AND amount >= ?", [$householdId, $todayStr, $today->modify('-60 days')->format('Y-m-d'), $minAmount]) as $t) {
+            foreach (Database::select("SELECT t.id, t.amount, t.description, t.date FROM transactions t WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'paid' AND t.date < ? AND t.date >= ? AND t.amount >= ? AND {$visibleSql}", array_merge([$householdId, $todayStr, $today->modify('-60 days')->format('Y-m-d'), $minAmount], $visibleParams)) as $t) {
                 $created += self::emit($userId, $householdId, $settings, 'overdue', 'Conta atrasada: ' . $t['description'], money($t['amount']) . ' venceu em ' . date_br($t['date']) . '. Pague ou marque como paga.', "overdue:tx:{$t['id']}:w" . $today->format('oW'), '/lancamentos/' . $t['id'] . '/editar', $channel($eff), ['payload' => ['transaction_id' => (int) $t['id'], 'vibrate' => true]]) ? 1 : 0;
             }
         }
@@ -200,7 +201,7 @@ final class NotificationScheduler
             if ($isDay && $local->format('H:i') >= $dueTime) {
                 $key = 'digest:' . ($d['frequency'] ?? 'weekly') . ':' . $todayStr;
                 if (Database::scalar('SELECT id FROM alerts WHERE user_id = ? AND dedupe_key = ?', [$userId, $key]) === null) {
-                    [$title, $body, $payload] = self::buildDigest($householdId, $today, (array) ($d['contents'] ?? []));
+                    [$title, $body, $payload] = self::buildDigest($householdId, $today, (array) ($d['contents'] ?? []), $userId);
                     $created += self::emit($userId, $householdId, $settings, 'digest', $title, $body, $key, '/painel', $channel($eff), ['payload' => $payload]) ? 1 : 0;
                 }
             }
@@ -234,7 +235,7 @@ final class NotificationScheduler
     }
 
     /** @param list<string> $contents @return array{0:string,1:string,2:array<string,mixed>} */
-    public static function buildDigest(int $householdId, DateTimeImmutable $today, array $contents): array
+    public static function buildDigest(int $householdId, DateTimeImmutable $today, array $contents, ?int $viewerId = null): array
     {
         $lines = [];
         $payload = [];
@@ -245,7 +246,8 @@ final class NotificationScheduler
             $payload['balance'] = $data['month'];
         }
         if (in_array('due', $contents, true)) {
-            $due = Database::select("SELECT description, amount, date FROM transactions WHERE household_id = ? AND deleted_at IS NULL AND type = 'expense' AND status <> 'paid' AND date <= ? ORDER BY date LIMIT 6", [$householdId, $today->modify('+7 days')->format('Y-m-d')]);
+            [$vs, $vp] = $viewerId !== null ? TransactionPolicy::visibleSql('t', $viewerId, $householdId) : ['t.is_private = 0', []];
+            $due = Database::select("SELECT t.description, t.amount, t.date FROM transactions t WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'paid' AND t.date <= ? AND {$vs} ORDER BY t.date LIMIT 6", array_merge([$householdId, $today->modify('+7 days')->format('Y-m-d')], $vp));
             $lines[] = $due === [] ? 'Nada a vencer nos próximos 7 dias.' : 'A vencer em 7 dias: ' . implode('; ', array_map(static fn(array $t): string => $t['description'] . ' ' . money($t['amount']) . ' (' . date_br($t['date']) . ')', $due)) . '.';
         }
         if (in_array('budgets', $contents, true)) {

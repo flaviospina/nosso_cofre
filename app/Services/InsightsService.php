@@ -16,7 +16,7 @@ use DateTimeImmutable;
 final class InsightsService
 {
     /** @return array<string,mixed> */
-    public static function dashboard(int $householdId, string $monthStart, ?int $memberId, DateTimeImmutable $today): array
+    public static function dashboard(int $householdId, string $monthStart, ?int $memberId, DateTimeImmutable $today, ?int $viewerId = null): array
     {
         $month = new DateTimeImmutable($monthStart);
         $from = $month->format('Y-m-01');
@@ -64,18 +64,28 @@ final class InsightsService
             }
         }
 
-        // 3) Despesas por categoria (pai) e por membro
+        // 3) Despesas por categoria (pai) e por membro — privados de outros membros viram "Lançamentos privados" (sem revelar categoria)
         $byCategory = [];
         $catTotal = 0.0;
+        [$hiddenSql, $hiddenParams] = TransactionPolicy::hiddenSql('t', TransactionPolicy::viewer($viewerId), $householdId);
         foreach (Database::select(
             "SELECT COALESCE(p.id, c.id) AS id, COALESCE(p.name, c.name, 'Sem categoria') AS name, COALESCE(p.color, c.color) AS color, COALESCE(p.icon, c.icon) AS icon, SUM(t.amount) AS total
                FROM transactions t LEFT JOIN categories c ON c.id = t.category_id LEFT JOIN categories p ON p.id = c.parent_id
-              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'scheduled' AND t.date BETWEEN ? AND ?{$memberSql}
+              WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'scheduled' AND t.date BETWEEN ? AND ?{$memberSql} AND NOT {$hiddenSql}
               GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name, 'Sem categoria'), COALESCE(p.color, c.color), COALESCE(p.icon, c.icon) ORDER BY total DESC",
-            array_merge([$householdId, $from, $to], $memberParams)
+            array_merge([$householdId, $from, $to], $memberParams, $hiddenParams)
         ) as $r) {
             $catTotal += (float) $r['total'];
             $byCategory[] = ['id' => $r['id'] !== null ? (int) $r['id'] : null, 'name' => (string) $r['name'], 'color' => $r['color'] ?: '#94a3b8', 'icon' => $r['icon'] ?: 'tag', 'amount' => round((float) $r['total'], 2)];
+        }
+        $hiddenTotal = (float) Database::scalar(
+            "SELECT COALESCE(SUM(t.amount), 0) FROM transactions t WHERE t.household_id = ? AND t.deleted_at IS NULL AND t.type = 'expense' AND t.status <> 'scheduled' AND t.date BETWEEN ? AND ?{$memberSql} AND {$hiddenSql}",
+            array_merge([$householdId, $from, $to], $memberParams, $hiddenParams)
+        );
+        if ($hiddenTotal > 0) {
+            $catTotal += $hiddenTotal;
+            $byCategory[] = ['id' => null, 'name' => 'Lançamentos privados', 'color' => '#94a3b8', 'icon' => 'lock', 'amount' => round($hiddenTotal, 2)];
+            usort($byCategory, static fn(array $a, array $b): int => $b['amount'] <=> $a['amount']);
         }
         if (count($byCategory) > 8) {
             $rest = array_slice($byCategory, 7);

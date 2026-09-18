@@ -94,10 +94,11 @@ self.addEventListener('notificationclick', function (event) {
     event.notification.close();
     var target = (event.notification.data && event.notification.data.url) || (BASE + '/');
     if (event.action === 'pay' && event.notification.data && event.notification.data.payUrl) { target = event.notification.data.payUrl; }
+    try { if (new URL(target, self.location.origin).origin !== self.location.origin) { target = BASE + '/'; } } catch (e) { target = BASE + '/'; }
     event.waitUntil(
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
             for (var i = 0; i < list.length; i++) {
-                if (list[i].url.indexOf(BASE) === 0 && 'focus' in list[i]) {
+                if (new URL(list[i].url).origin === self.location.origin && new URL(list[i].url).pathname.indexOf(BASE + '/') === 0 && 'focus' in list[i]) {
                     list[i].postMessage({ type: 'notification-open', data: event.notification.data });
                     list[i].navigate(target);
                     return list[i].focus();

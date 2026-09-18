@@ -42,7 +42,7 @@ final class AuthController extends Controller
         }
         $data = $this->validate([
             'name'     => 'required|min:2|max:120',
-            'email'    => 'required|email|unique:users,email',
+            'email'    => 'required|email',
             'password' => 'required|password|confirmed',
             'terms'    => 'accepted',
             'adult'    => 'accepted',
@@ -51,16 +51,23 @@ final class AuthController extends Controller
             'terms' => 'os Termos de Uso e a Política de Privacidade', 'adult' => 'a confirmação de maioridade',
         ], 'auth.register');
 
-        $user = AuthService::register([
-            'name'            => $data['name'],
-            'email'           => $data['email'],
-            'password'        => $data['password'],
-            'terms_version'   => LegalService::version('terms'),
-            'privacy_version' => LegalService::version('privacy'),
-        ], $this->request);
+        $email = mb_strtolower(trim((string) $data['email']));
+        $existing = (new \App\Models\User())->findByEmail($email);
+        if ($existing !== null) {
+            // Não revela que o e-mail já tem conta: a resposta é a mesma e quem é dono do endereço recebe um aviso
+            AuthService::notifyExistingAccount($existing, $this->request);
+        } else {
+            AuthService::register([
+                'name'            => $data['name'],
+                'email'           => $email,
+                'password'        => $data['password'],
+                'terms_version'   => LegalService::version('terms'),
+                'privacy_version' => LegalService::version('privacy'),
+            ], $this->request);
+        }
 
-        Session::set('pending_verification_email', $user['email']);
-        $this->flash('success', 'Conta criada! Enviamos um link de confirmação para ' . $user['email'] . '. Ele vale por 24 horas.');
+        Session::set('pending_verification_email', $email);
+        $this->flash('success', 'Conta criada! Enviamos um link de confirmação para ' . $email . '. Ele vale por 24 horas.');
         return $this->redirectRoute('verification.notice');
     }
 
@@ -68,7 +75,8 @@ final class AuthController extends Controller
 
     public function loginForm(): Response
     {
-        $status = RateLimiter::status('login', $this->request->ip(), null);
+        $email = mb_strtolower(trim((string) old('email', '')));
+        $status = RateLimiter::status('login', $this->request->ip(), $email !== '' ? $email : null);
         return $this->view('auth/login', [
             'title'   => 'Entrar',
             'captcha' => $status['captcha'] ? Captcha::challenge() : null,

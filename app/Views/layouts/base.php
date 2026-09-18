@@ -5,15 +5,15 @@
 $appName = $appName ?? (string) config('app.name', 'Nosso Cofre');
 $appVersion = $appVersion ?? (string) config('app.version', '');
 $title = isset($title) ? $title . ' · ' . $appName : $appName;
-$user = auth_user();
-$household = \App\Core\Auth::household();
+$user = empty($guestLayout) ? auth_user() : null;
+$household = empty($guestLayout) ? \App\Core\Auth::household() : null;
 ?>
 <!doctype html>
 <html lang="pt-BR" data-bs-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
+    <?php if (empty($guestLayout)): ?><meta name="csrf-token" content="<?= e(csrf_token()) ?>"><?php endif; ?>
     <meta name="app-base" content="<?= e(url('/')) ?>">
     <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">

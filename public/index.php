@@ -18,7 +18,8 @@ if (is_file(__DIR__ . '/app-root.php')) {
 if (!is_file($appRoot . '/app/bootstrap.php')) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    echo "Nosso Cofre: pasta do projeto nao encontrada em {$appRoot}.\n";
+    error_log("Nosso Cofre: pasta do projeto nao encontrada em {$appRoot}");
+    echo "Nosso Cofre: pasta do projeto nao encontrada (veja o log de erros do PHP para o caminho testado).\n";
     echo "Crie o arquivo app-root.php ao lado deste index.php devolvendo o caminho absoluto da pasta que contem app/ e storage/.\n";
     exit;
 }

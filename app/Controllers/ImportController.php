@@ -107,6 +107,9 @@ final class ImportController extends Controller
         if ((int) $accountOk === 0) {
             throw new HttpException(422, 'Conta inválida.');
         }
+        if (!empty($data['responsible_user_id']) && (int) \App\Core\Database::scalar('SELECT COUNT(*) FROM household_members WHERE household_id = ? AND user_id = ? AND left_at IS NULL', [$householdId, (int) $data['responsible_user_id']]) === 0) {
+            throw new HttpException(422, 'Responsável inválido.');
+        }
         $mapping = [];
         if ($meta['format'] === 'csv') {
             $inspect = ImportService::inspectCsv($meta['path']);
@@ -136,6 +139,13 @@ final class ImportController extends Controller
     public function undo(string $id): Response
     {
         $this->requireWrite();
+        $batch = (new ImportBatch())->findOrFail((int) $id);
+        if ((int) $batch['user_id'] !== (int) Auth::id() && !Auth::canManage()) {
+            throw new HttpException(403, 'Só quem importou (ou o responsável do lar) pode desfazer este lote.');
+        }
+        if ($batch['status'] === 'undone') {
+            throw new HttpException(422, 'Este lote já foi desfeito.');
+        }
         $n = ImportService::undo((int) $id);
         $this->flash('success', "{$n} lançamento(s) enviados para a lixeira.");
         return $this->redirectRoute('import.index');

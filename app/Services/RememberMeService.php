@@ -112,7 +112,7 @@ final class RememberMeService
         setcookie(self::COOKIE, $value, [
             'expires'  => $expires,
             'path'     => $base === '' ? '/' : $base . '/',
-            'secure'   => str_starts_with((string) Config::get('app.url', ''), 'https://'),
+            'secure'   => str_starts_with((string) Config::get('app.url', ''), 'https://') || (($_SERVER['HTTPS'] ?? '') !== '' && strtolower((string) $_SERVER['HTTPS']) !== 'off'),
             'httponly' => true,
             'samesite' => 'Lax', // Lax (não Strict) para o cookie valer ao abrir um link de e-mail
         ]);

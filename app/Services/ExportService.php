@@ -105,8 +105,17 @@ final class ExportService
     private static function collect(int $userId, array $user): array
     {
         $households = Database::select('SELECT h.id, h.name, h.type, h.currency, m.role, m.joined_at, m.left_at FROM household_members m JOIN households h ON h.id = m.household_id WHERE m.user_id = ?', [$userId]);
-        $ids = array_map(static fn(array $h): int => (int) $h['id'], $households);
+        // Só lares em que o usuário ainda está: dos que saiu, exporta-se apenas o histórico de participação
+        $ids = array_map(static fn(array $h): int => (int) $h['id'], array_filter($households, static fn(array $h): bool => $h['left_at'] === null));
         $in = $ids === [] ? '0' : implode(',', $ids);
+        $visible = [];
+        $visibleParams = [];
+        foreach ($ids as $hid) {
+            [$vs, $vp] = TransactionPolicy::visibleSql('t', $userId, $hid);
+            $visible[] = "(t.household_id = {$hid} AND {$vs})";
+            $visibleParams = array_merge($visibleParams, $vp);
+        }
+        $visibleSql = $visible === [] ? '0' : '(' . implode(' OR ', $visible) . ')';
         $sub = static fn(string $sql, array $p = []): array => Database::select($sql, $p);
         return [
             'exportado_em' => gmdate('c'),
@@ -118,7 +127,7 @@ final class ExportService
             'lancamentos' => array_map(static function (array $t): array {
                 $t['observacoes'] = \App\Core\Crypto::tryDecrypt($t['observacoes'] ?? null);
                 return $t;
-            }, $sub("SELECT id, household_id, account_id AS conta_id, category_id AS categoria_id, responsible_user_id AS responsavel_user_id, created_by AS criado_por, type AS tipo, amount AS valor, date AS data, paid_at AS pago_em, description AS descricao, notes AS observacoes, tags, status, installment_no AS parcela, installment_total AS total_parcelas, auto_debit AS debito_automatico, is_private AS privado, created_at FROM transactions WHERE household_id IN ({$in}) AND (responsible_user_id = ? OR created_by = ?) AND deleted_at IS NULL", [$userId, $userId])),
+            }, $sub("SELECT id, household_id, account_id AS conta_id, category_id AS categoria_id, responsible_user_id AS responsavel_user_id, created_by AS criado_por, type AS tipo, amount AS valor, date AS data, paid_at AS pago_em, description AS descricao, notes AS observacoes, tags, status, installment_no AS parcela, installment_total AS total_parcelas, auto_debit AS debito_automatico, is_private AS privado, created_at FROM transactions t WHERE t.household_id IN ({$in}) AND (t.responsible_user_id = ? OR t.created_by = ?) AND t.deleted_at IS NULL AND {$visibleSql}", array_merge([$userId, $userId], $visibleParams))),
             'recorrencias' => $sub("SELECT id, household_id, description AS descricao, kind AS tipo, expected_amount AS valor_previsto, frequency AS frequencia, day_of_month AS dia, month_of_year AS mes, start_date AS inicio, end_date AS fim, auto_debit AS debito_automatico, is_subscription AS assinatura, is_active AS ativa FROM recurring_rules WHERE household_id IN ({$in}) AND (responsible_user_id = ? OR responsible_user_id IS NULL) AND deleted_at IS NULL", [$userId]),
             'orcamentos' => $sub("SELECT id, household_id, category_id AS categoria_id, period_month AS mes, limit_amount AS limite FROM budgets WHERE household_id IN ({$in}) AND (user_id = ? OR user_id IS NULL)", [$userId]),
             'metas' => $sub("SELECT id, household_id, name AS nome, target_amount AS alvo, saved_amount AS guardado, deadline AS prazo, status FROM goals WHERE household_id IN ({$in}) AND (user_id = ? OR user_id IS NULL) AND deleted_at IS NULL", [$userId]),
@@ -143,12 +152,30 @@ final class ExportService
         fwrite($out, "\xEF\xBB\xBF"); // BOM para o Excel abrir em UTF-8
         fputcsv($out, array_keys($rows[0]), ';', '"', '\\');
         foreach ($rows as $row) {
-            fputcsv($out, array_map(static fn($v) => is_array($v) ? json_encode($v, JSON_UNESCAPED_UNICODE) : ($v ?? ''), array_values($row)), ';', '"', '\\');
+            fputcsv($out, array_map(static fn($v) => self::csvSafe(is_array($v) ? (string) json_encode($v, JSON_UNESCAPED_UNICODE) : (string) ($v ?? '')), array_values($row)), ';', '"', '\\');
         }
         rewind($out);
         $csv = (string) stream_get_contents($out);
         fclose($out);
         return $csv;
+    }
+
+    /**
+     * Neutraliza injeção de fórmula em planilhas: célula que começa com = + - @ TAB ou CR ganha apóstrofo na frente
+     * (o Excel/LibreOffice mostram o texto em vez de executar). Valores monetários negativos usam o sinal "−" (U+2212).
+     */
+    public static function csvSafe(string $cell): string
+    {
+        if ($cell !== '' && strpbrk($cell[0], "=+-@\t\r") !== false) {
+            if (preg_match('/^[-+]?\d+([.,]\d+)?$/', $cell) === 1) {
+                return $cell; // número puro (ex.: -50,00): a planilha lê como número, não como fórmula
+            }
+            if (preg_match('/^-\s*R\$/u', $cell) === 1) {
+                return '−' . substr($cell, 1);
+            }
+            return "'" . $cell;
+        }
+        return $cell;
     }
 
     /** @param array<string,mixed> $user */

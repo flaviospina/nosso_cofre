@@ -123,10 +123,12 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 ### 3.10 Regras de segurança da conta
 - Senha: mínimo 10 caracteres, letras e números, verificada contra lista local de senhas vazadas comuns.
 - E-mail confirmado obrigatoriamente antes do primeiro acesso (link de 24 h).
-- Após 3 falhas de login no mesmo IP ou conta, aparece um desafio aritmético próprio; a partir de 5 falhas o bloqueio é progressivo (1, 5, 15 e 60 minutos).
+- Após 3 falhas de login no mesmo IP ou na mesma conta, aparece um desafio aritmético próprio (cada desafio vale uma resposta); a partir de 5 falhas **do mesmo IP** o bloqueio é progressivo (1, 5, 15 e 60 minutos). Falhas vindas de outros IPs contra a sua conta só exigem o desafio (bloqueio por conta apenas a partir de 20), para que ninguém tranque a sua conta de propósito.
+- O cadastro nunca revela se um e-mail já tem conta: a resposta é igual e o dono do endereço recebe um aviso por e-mail.
 - 2FA (TOTP) opcional para todos e **obrigatório** para responsável e administradores de lar familiar; 10 códigos de recuperação de uso único.
 - "Lembrar-me": cookie com par selector/validator, validator trocado a cada uso, 30 dias; roubo do banco não dá acesso.
-- Login de aparelho ou IP desconhecido gera e-mail de aviso; a tela Conta → Sessões ativas encerra as outras sessões e revoga os acessos lembrados.
+- Login de aparelho ou IP desconhecido gera e-mail de aviso; a tela Conta → Sessões ativas encerra as outras sessões (pede a senha) e revoga os acessos lembrados.
+- Links por e-mail (confirmação, redefinição, troca de e-mail) são de uso único e um pedido novo invalida o anterior; o corpo dos e-mails some da fila (`email_outbox`) assim que enviado.
 - Troca ou redefinição de senha encerra as demais sessões.
 - Tudo fica no log de auditoria, visível ao próprio usuário em Conta → Minha atividade.
 
@@ -181,13 +183,46 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Previsão de caixa** (`/previsao`): saldo líquido de hoje + pendentes, agendados, recorrências ainda não geradas e faturas de cartão no vencimento, dia a dia por até 120 dias; mostra o primeiro dia negativo, o ponto mais baixo e a **sobra segura** (quanto dá para guardar sem faltar até a próxima receita). O aviso "mês apertado" usa esse cálculo.
 - **Backup**: com `BACKUP_KEY` no `.env`, o cron gera um `storage/backups/nosso-cofre-AAAA-MM-DD-HHMM.sql.gz.enc` por dia (SQL completo em PHP puro, gzip, AES-256-GCM) e mantém `BACKUP_RETENTION_DAYS`. Quem está em `ADMIN_EMAILS` vê *Backups (controlador)* para gerar agora e baixar. **Restaurar**: (a) com terminal, `php tools/restaurar-backup.php arquivo.sql.gz.enc` (pede confirmação); (b) sem terminal, no seu computador com PHP instalado: `php tools/restaurar-backup.php arquivo.sql.gz.enc --somente-sql > restauracao.sql` (o `.env` local precisa da mesma `BACKUP_KEY`) e importe o `.sql` pelo phpMyAdmin. Guarde a `BACKUP_KEY` fora do servidor: sem ela o backup é ilegível.
 
+### 3.17 Revisão final de segurança e LGPD (fase 8): checklist item por item
+
+Três revisões independentes (isolamento entre lares e membros; autenticação, sessão e LGPD; saída HTML, CSP, uploads e JavaScript) foram feitas sobre o código completo. Tudo o que foi apontado está corrigido e coberto por teste, exceto os riscos aceitos listados no fim.
+
+| Item | Como é atendido | Onde |
+|---|---|---|
+| Isolamento entre lares | Todo `Model` injeta `household_id` da sessão; ids de outro lar dão 404 | `app/Core/Model.php` |
+| Lançamento privado / "compartilhar com o lar" | Filtro SQL único (`TransactionPolicy::visibleSql`) aplicado a busca, filtros por categoria e etiqueta, relatórios por categoria, radar de assinaturas, previsão de caixa, avisos do agendador e exportação LGPD; nos agregados (painel e relatório mensal) o que é de outro membro aparece como "Lançamentos privados", sem revelar categoria; quem desliga o consentimento *compartilhar com o lar* tem tudo tratado como privado pelos demais | `app/Services/TransactionPolicy.php`, testes `SecurityHardeningTest`, `tools/smoke-fase8.sh` |
+| Edição só de quem pode | `canEdit` também nas ocorrências de recorrência (confirmar/pular), desfazer importação só por quem importou ou responsável, responsável de lançamento/importação/lote tem de ser membro do lar, modelo favorito só do próprio usuário | `RecurrenceController`, `ImportController`, `TransactionController` |
+| CSRF | Token por sessão em todo POST (campo oculto ou cabeçalho `X-CSRF-Token`), `SameSite=Strict` | `app/Core/Csrf.php` |
+| XSS | `e()` (`ENT_QUOTES`) em toda saída; JSON embutido com `JSON_HEX_TAG`; JS sem `innerHTML` com dado do servidor; Markdown legal escapa antes de marcar | `app/helpers.php`, views |
+| CSP e cabeçalhos | `script-src 'self' 'nonce-…'` (sem host externo; os scripts do CDN levam nonce + SRI), `style-src` com nonce, `frame-ancestors 'none'`, `object-src 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS com https, `X-Powered-By` removido | `app/Core/Response.php` |
+| SQL injection | PDO com placeholders em 100 % das consultas; listas de ids montadas só de inteiros | `app/Core/Database.php` |
+| Uploads | MIME por `finfo`, extensão pelo MIME, nome aleatório, gravação fora de `public/`, imagens recodificadas (sem EXIF/GPS), 5 MB; PDF é **baixado** (não abre no visualizador, pois pode conter JavaScript) | `AttachmentService`, `TransactionController::attachment` |
+| CSV / planilhas | Célula que começa com `=`, `+`, `-`, `@`, TAB ou CR recebe apóstrofo (números negativos continuam números) nos relatórios e na exportação LGPD | `ExportService::csvSafe` |
+| Senhas | Argon2id (ou bcrypt 12), lista de senhas vazadas, hash falso no mesmo algoritmo quando o e-mail não existe (tempo constante) | `app/Core/Auth.php` |
+| Rate limit e CAPTCHA | Progressivo por IP; por conta só CAPTCHA até 20 falhas; CAPTCHA de uso único, assinado com HMAC e com validade | `RateLimiter`, `Captcha` |
+| 2FA | TOTP próprio (RFC 6238), anti-replay atômico (`UPDATE … WHERE totp_last_counter < ?`), códigos de recuperação com HMAC da chave do app (não quebráveis offline) | `TwoFactorService` |
+| Sessões | Banco, `HttpOnly`/`Secure`/`SameSite=Strict`, inatividade e absoluta; o polling de avisos não conta como atividade; encerrar outras sessões pede a senha; troca de senha derruba as demais | `app/Core/Session.php`, `AccountController` |
+| Tokens por e-mail | Aleatórios (32 bytes), guardados por hash, uso único, pedido novo invalida o anterior, usuário precisa estar ativo | `AuthService` |
+| E-mails | Cabeçalhos sem CR/LF, corpo escapado, parte texto; corpo apagado do `email_outbox` após envio; pendentes/falhos expiram em 7 dias | `Mailer`, `RetentionService` |
+| Erros e informação | Mensagem genérica sem `APP_DEBUG`; erro de banco nunca vai para a tela (só para o log); `/saude` mostra detalhes só a admin, com `CRON_TOKEN` ou em debug; `index.php` não imprime caminho do servidor | `ErrorHandler`, `SystemController` |
+| PWA | Página offline em cache sem nome, avisos ou token do usuário; service worker só navega para a própria origem; nada financeiro em cache | `public/sw.js`, `layouts/base.php` |
+| Criptografia em repouso | AES-256-GCM: segredo TOTP, CPF, observações; backup cifrado com `BACKUP_KEY` | `app/Core/Crypto.php`, `BackupService` |
+| LGPD art. 18 | Acesso, exportação (só lares ativos, só o que o titular pode ver), correção, revogação de consentimentos, portabilidade, anonimização (limpa convites, tentativas de login e fila de e-mail), exclusão com carência | `PrivacyService`, `ExportService` |
+| Retenção e incidentes | Prazos em `settings` aplicados pelo cron; registro de incidente com comunicação a titulares e ANPD | `RetentionService`, `IncidentService` |
+
+**Riscos aceitos (documentados)**
+- Sair do lar e cancelar a exclusão da conta não pedem a senha de novo (ações reversíveis ou na direção segura); todas as irreversíveis pedem senha e, se ativo, 2FA.
+- O link "marcar como pago" do e-mail/push é GET assinado, válido por 48 h, idempotente e só executa com a sessão do próprio usuário.
+- Códigos de recuperação gerados antes da fase 8 continuam aceitos pelo hash antigo até serem regenerados.
+- Comprovantes não são cifrados (ver seção 4).
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
 - **Multi-tenant por lar**: o `Model` base injeta `household_id = <lar da sessão>` em toda consulta e lança exceção se não houver lar. Um id de outro lar simplesmente "não existe" (404).
 - **Datas**: `DATETIME` sempre em UTC no banco (a conexão PDO fixa `time_zone = '+00:00'`); a exibição converte para o fuso do usuário (`users.timezone`). `DATE` de lançamentos é data de calendário.
 - **Senhas**: Argon2id quando o PHP do servidor suporta; caso contrário bcrypt custo 12. O login faz *rehash* automático quando o algoritmo disponível melhora. O seed usa bcrypt por ser verificável em qualquer PHP.
-- **Criptografia em repouso** (AES-256-GCM com `APP_KEY`): segredo TOTP, CPF opcional e observações dos lançamentos. Descrição e valor ficam em claro porque busca, filtros e relatórios dependem deles.
+- **Criptografia em repouso** (AES-256-GCM com `APP_KEY`): segredo TOTP, CPF opcional e observações dos lançamentos. Descrição e valor ficam em claro porque busca, filtros e relatórios dependem deles. **Comprovantes não são cifrados**: ficam fora da raiz pública, com nome aleatório e servidos só por controller autenticado; cifrar cada imagem exigiria decifrar e recodificar a cada visualização no PHP compartilhado (memória e tempo), e o backup do banco não os inclui — o próprio cPanel faz o backup da pasta.
 - **CSP com nonce** para scripts e estilos: nenhum `<script>` ou `style=""` inline solto nas views. Cores dinâmicas usam `data-bg`, `data-color`, `data-width`, aplicadas pelo `app.js`.
 - **Sessões**: cookie `HttpOnly`, `Secure`, `SameSite=Strict`, restrito ao caminho `/cofre/`; arquivos em `storage/sessions`; expiração por inatividade (configurável) e absoluta (12 h). Na fase 2 as sessões passam para o banco (tela "Sessões ativas").
 - **Logs**: `storage/logs/app-AAAA-MM-DD.log` e `security-AAAA-MM-DD.log`, com retenção de `LOG_RETENTION_DAYS`. Senhas e tokens nunca entram no log.
@@ -213,6 +248,8 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Avisos como linhas em `alerts`** com `dedupe_key`: a detecção pode rodar quantas vezes for (cron a cada 5 min) sem repetir; a entrega é uma etapa separada, o que permite adiar por horário silencioso, agrupar e limitar por dia sem perder nada.
 - **Backup em PHP puro**: `mysqldump` e `exec()` costumam estar bloqueados no compartilhado; o dump por `SELECT` em blocos de 500 linhas cabe no limite de memória do PHP para o volume de um lar.
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
+- **Privado entra no total, não na categoria**: o lançamento privado de outro membro (ou de quem não compartilha) continua somando no saldo do lar, mas nos gráficos por categoria vira a fatia "Lançamentos privados" e some de busca, filtros e relatório por categoria. É o único jeito de manter os totais da casa corretos sem revelar o que foi comprado.
+- **`script-src` sem host do CDN**: com nonce, um `<script src="https://cdn…">` com o nonce já é permitido; liberar o host inteiro deixaria qualquer pacote do npm (AngularJS etc.) disponível para contornar a CSP em caso de regressão de XSS.
 
 ## 5. Dados de exemplo (seed.sql)
 
@@ -230,6 +267,7 @@ bash tools/smoke-fase4.sh              # teste de ponta a ponta da fase 4 (banco
 bash tools/smoke-fase5.sh              # teste de ponta a ponta da fase 5 (banco limpo com seed)
 bash tools/smoke-fase6.sh              # teste de ponta a ponta da fase 6 (banco limpo com seed)
 bash tools/smoke-fase7.sh              # teste de ponta a ponta da fase 7 (banco limpo; .env com BACKUP_KEY, VAPID_* e CRON_TOKEN)
+bash tools/smoke-fase8.sh              # segurança e LGPD de ponta a ponta (banco limpo com seed; CRON_TOKEN; altera APP_DEBUG só durante o teste)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
@@ -241,8 +279,8 @@ Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://12
 4. ✅ Cadastros financeiros: contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
 5. ✅ Recorrências, radar de assinaturas, orçamento (projeção, essencial × supérfluo, 50/30/20), metas com aportes, plano de ação (estimado × realizado) e simulador "e se"
 6. ✅ Painel com os 11 indicadores e gráficos, relatórios (mensal, anual, membro, categoria, conta/fatura) com CSV e PDF
-7. ✅ Notificações 100 % configuráveis, Web Push próprio, sons e cores, agendador, central de avisos, previsão de caixa, cron e backup criptografado (esta entrega)
-8. Testes, revisão final de segurança/LGPD, polimento mobile
+7. ✅ Notificações 100 % configuráveis, Web Push próprio, sons e cores, agendador, central de avisos, previsão de caixa, cron e backup criptografado
+8. ✅ Testes (81 unitários/integração + 7 roteiros de ponta a ponta), revisão final de segurança e LGPD item por item (seção 3.17), polimento mobile e tema escuro (esta entrega)
 9. Carteira de investimentos (cadastro, rentabilidade, alocação, liquidez, IR/FGC, "melhor momento de aplicar" por regras)
 10. Diferenciais: divisão justa entre o casal, ritual da conversa financeira, compra com tempo de espera, preço em horas de trabalho, custo do hábito, inflação pessoal, cartão inteligente, tempo até a independência
 

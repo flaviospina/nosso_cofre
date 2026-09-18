@@ -19,7 +19,7 @@
                 <?php endif; ?>
                 <div>
                     <div><?= e($check['label']) ?></div>
-                    <?php if ($check['info'] !== '' && (!$check['ok'] || $debug)): ?>
+                    <?php if ($check['info'] !== '' && $debug): ?>
                         <div class="small text-body-secondary"><?= e($check['info']) ?></div>
                     <?php endif; ?>
                 </div>
@@ -27,6 +27,6 @@
         <?php endforeach; ?>
     </ul>
     <p class="small text-body-secondary mt-3">
-        Detalhes técnicos (versões, caminhos) só aparecem com <code>APP_DEBUG=true</code>. Em produção mantenha <code>false</code>.
+        Detalhes de cada item aparecem para o administrador (ADMIN_EMAILS) logado, com <code>?token=SEU_CRON_TOKEN</code> na URL ou com <code>APP_DEBUG=true</code>. Em produção mantenha o debug <code>false</code>.
     </p>
 </div>

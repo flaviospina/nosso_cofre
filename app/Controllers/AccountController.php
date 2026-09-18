@@ -152,6 +152,11 @@ final class AccountController extends Controller
     public function revokeOtherSessions(): Response
     {
         $userId = (int) Auth::id();
+        $data = $this->validate(['password' => 'required'], ['password' => 'senha'], 'account.sessions');
+        if (!Auth::verifyPassword((string) $data['password'], (string) (Auth::user()['password_hash'] ?? ''))) {
+            Session::flashErrors(['password' => ['Senha incorreta.']]);
+            return $this->redirectRoute('account.sessions');
+        }
         $count = DatabaseSessionHandler::destroyOthers($userId, session_id());
         RememberMeService::revokeAll($userId);
         AuditService::log('user.sessions_revoked', 'user', $userId, null, ['sessions' => $count]);

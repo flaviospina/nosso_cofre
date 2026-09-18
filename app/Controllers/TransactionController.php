@@ -93,7 +93,7 @@ final class TransactionController extends Controller
             }
         } elseif ($this->request->query('modelo') !== null) {
             $tpl = (new TransactionTemplate())->find((int) $this->request->query('modelo'));
-            if ($tpl !== null) {
+            if ($tpl !== null && (int) $tpl['user_id'] === (int) Auth::id()) {
                 $prefill = $tpl;
             }
         }
@@ -109,6 +109,9 @@ final class TransactionController extends Controller
         try {
             $ids = TransactionService::create($data, $this->request->file('attachment'));
         } catch (\RuntimeException $e) {
+            if ($e instanceof \PDOException || get_class($e) !== \RuntimeException::class) {
+                throw $e; // erro de banco/infra: mensagem genérica pelo ErrorHandler, detalhe só no log
+            }
             Session::flashErrors(['attachment' => [$e->getMessage()]]);
             Session::flashInput($this->request->all());
             return $this->redirectRoute('transactions.create');
@@ -135,6 +138,9 @@ final class TransactionController extends Controller
         try {
             TransactionService::update((int) $id, $data, $this->request->file('attachment'), $this->request->bool('remove_attachment'));
         } catch (\RuntimeException $e) {
+            if ($e instanceof \PDOException || get_class($e) !== \RuntimeException::class) {
+                throw $e;
+            }
             Session::flashErrors(['attachment' => [$e->getMessage()]]);
             return $this->redirectRoute('transactions.edit', ['id' => $id]);
         }
@@ -214,6 +220,9 @@ final class TransactionController extends Controller
         if ($data['action'] === 'status' && !in_array($value, ['paid', 'pending', 'scheduled'], true)) {
             throw new HttpException(422, 'Situação inválida.');
         }
+        if ($data['action'] === 'responsible' && $value !== null && $value !== '' && (int) Database::scalar('SELECT COUNT(*) FROM household_members WHERE household_id = ? AND user_id = ? AND left_at IS NULL', [(int) Auth::householdId(), (int) $value]) === 0) {
+            throw new HttpException(422, 'Responsável inválido.');
+        }
         $n = TransactionService::bulk($ids, (string) $data['action'], $value === '' ? null : $value);
         $this->flash('success', "{$n} lançamento(s) alterado(s).");
         return $this->back('transactions.index');
@@ -230,7 +239,9 @@ final class TransactionController extends Controller
         if ($path === null) {
             throw new HttpException(404, 'Comprovante não encontrado.');
         }
-        return Response::file($path, (string) ($tx['attachment_name'] ?: 'comprovante'), (string) ($tx['attachment_mime'] ?: 'application/octet-stream'), true);
+        $mime = (string) ($tx['attachment_mime'] ?: 'application/octet-stream');
+        // Imagens abrem na tela; PDF (pode trazer JavaScript/formulários) é baixado
+        return Response::file($path, (string) ($tx['attachment_name'] ?: 'comprovante'), $mime, str_starts_with($mime, 'image/'));
     }
 
     // --- Modelos favoritos ---
@@ -375,10 +386,13 @@ final class TransactionController extends Controller
             $params[] = $f['account'];
             $params[] = $f['account'];
         }
+        [$visibleSql, $visibleParams] = TransactionPolicy::visibleSql('t', (int) Auth::id(), $householdId);
         if ($f['category'] > 0) {
-            $where[] = '(t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?))';
+            // Filtrar por categoria/etiqueta/texto revelaria dados de lançamentos privados de outros: eles ficam fora do filtro
+            $where[] = '(t.category_id = ? OR t.category_id IN (SELECT id FROM categories WHERE parent_id = ?)) AND ' . $visibleSql;
             $params[] = $f['category'];
             $params[] = $f['category'];
+            $params = array_merge($params, $visibleParams);
         }
         if ($f['type'] !== '') {
             $where[] = 't.type = ?';
@@ -389,13 +403,14 @@ final class TransactionController extends Controller
             $params[] = $f['status'];
         }
         if ($f['tag'] !== '') {
-            $where[] = 'JSON_SEARCH(t.tags, "one", ?) IS NOT NULL';
+            $where[] = 'JSON_SEARCH(t.tags, "one", ?) IS NOT NULL AND ' . $visibleSql;
             $params[] = $f['tag'];
+            $params = array_merge($params, $visibleParams);
         }
         if ($f['search'] !== '') {
-            $where[] = '(t.description LIKE ? AND NOT (t.is_private = 1 AND t.created_by <> ?))';
+            $where[] = 't.description LIKE ? AND ' . $visibleSql;
             $params[] = '%' . addcslashes($f['search'], '%_\\') . '%';
-            $params[] = (int) Auth::id();
+            $params = array_merge($params, $visibleParams);
         }
         return [implode(' AND ', $where), $params];
     }
