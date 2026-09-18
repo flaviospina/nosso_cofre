@@ -50,15 +50,26 @@ Todas as pastas internas (`app`, `storage`, `vendor`, `cron`, `sql`, `legal`, `t
    Pode ser importado de novo em atualizações futuras: ele não apaga nem duplica nada.
 4. Importe `sql/seed.sql` **somente** se quiser o modelo de categorias e o lar de teste (ver §5). Em produção, importe o seed e depois exclua o lar de teste pela tela, ou importe só a seção 1 (categorias).
 
-### 3.2 Arquivos
-1. Compacte a pasta do projeto em `.zip` (sem o `.git`).
-2. cPanel → **Gerenciador de Arquivos** → entre em `public_html` → *Upload* do zip → botão direito → *Extract*.
-3. Garanta que o resultado seja `public_html/cofre/` contendo `.htaccess`, `public/`, `app/` etc. (se extraiu com uma pasta a mais, mova o conteúdo).
-4. Marque *Mostrar arquivos ocultos (dotfiles)* nas configurações do Gerenciador para enxergar `.htaccess` e `.env`.
-5. Permissões: pastas `755`, arquivos `644`; `storage/` e suas subpastas precisam ser graváveis pelo PHP (no HostGator `755` já basta, pois o PHP roda com o seu usuário).
+### 3.2 Arquivos: dois layouts possíveis
+
+**Layout B (recomendado no HostGator)** — só o conteúdo de `public/` fica na pasta pública; o restante fica fora de `public_html`. Não usa o `.htaccess` da raiz do projeto, que alguns planos rejeitam sem registrar nada no log.
+
+```
+/home1/SEU_USUARIO/nossocofre_app/     ← app/, storage/, sql/, cron/, vendor/, legal/, tests/, .env
+/home1/SEU_USUARIO/public_html/nossocofre/   ← index.php, .htaccess, sw.js, manifest, assets/ e app-root.php
+```
+
+1. Gerenciador de Arquivos → vá para a **home** (`/home1/SEU_USUARIO`, um nível acima de `public_html`) → *Upload* de `nossocofre_app.zip` → *Extract*. Surge a pasta `nossocofre_app/`.
+2. Vá para `public_html/nossocofre/` (crie se não existir; se já tiver a tentativa anterior, apague tudo dentro dela) → *Upload* de `nossocofre_web.zip` → *Extract*.
+3. Abra `public_html/nossocofre/app-root.php` e confira o caminho: `return '/home1/SEU_USUARIO/nossocofre_app';` (o caminho da home aparece à direita na tela inicial do cPanel).
+4. O `.env` fica em `nossocofre_app/.env`.
+
+**Layout A** — projeto inteiro em `public_html/nossocofre/` com `public/` dentro; o `.htaccess` da raiz reescreve tudo para `public/`. Passos: zip do projeto → *Upload* em `public_html` → *Extract* → conferir que o resultado é `public_html/nossocofre/` com `.htaccess`, `public/`, `app/` etc. Sem `app-root.php`.
+
+Em ambos: pastas `755`, arquivos `644`, nunca `777`; marque *Mostrar arquivos ocultos* para enxergar `.htaccess` e `.env`.
 
 ### 3.3 Configuração (.env)
-1. Copie `.env.example` para `.env` (botão direito → *Copy*) e edite.
+1. Copie `.env.example` para `.env` (botão direito → *Copy*) e edite. No layout B ele fica em `nossocofre_app/.env`.
 2. Preencha `APP_URL=https://itthrive.com.br/cofre`, os dados do banco (`DB_*`), o e-mail SMTP (`MAIL_*` — conta `cofre@itthrive.com.br`, servidor `mail.itthrive.com.br`, porta 465, `ssl`) e os dados do controlador/encarregado (`CONTROLLER_*`, `DPO_*`).
 3. Abra `https://itthrive.com.br/cofre/instalar`: a tela gera `APP_KEY`, `BACKUP_KEY` e `CRON_TOKEN`. Cole as três linhas no `.env`. **Guarde o `BACKUP_KEY` fora do servidor.** Depois que o `APP_KEY` estiver preenchido, `/instalar` deixa de existir.
 4. Mantenha `APP_ENV=production` e `APP_DEBUG=false`.

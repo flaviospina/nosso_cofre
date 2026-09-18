@@ -5,6 +5,7 @@
 
     # Nunca servir arquivos ocultos ou de configuracao que caiam aqui por engano
     RewriteRule (^|/)\.(env|git|htaccess) - [F,L]
+    RewriteRule ^app-root(\.example)?\.php$ - [F,L]
     RewriteRule \.(sql|md|log|lock|ini|bak)$ - [F,L]
 
     # Raiz da pasta  index.php (nao depende de DirectoryIndex)

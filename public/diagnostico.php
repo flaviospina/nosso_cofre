@@ -7,7 +7,14 @@ declare(strict_types=1);
 // O teste de sessão precisa rodar antes de qualquer saída (cookies são cabeçalhos)
 $sessionResult = 'FALHOU';
 try {
-    session_save_path(dirname(__DIR__) . '/storage/sessions');
+    $sessRoot = dirname(__DIR__);
+    if (is_file(__DIR__ . '/app-root.php')) {
+        $cfg = require __DIR__ . '/app-root.php';
+        if (is_string($cfg) && $cfg !== '') {
+            $sessRoot = rtrim($cfg, '/\\');
+        }
+    }
+    session_save_path($sessRoot . '/storage/sessions');
     session_name('nc_diag');
     if (@session_start()) {
         $_SESSION['x'] = 1;
@@ -28,6 +35,14 @@ while (ob_get_level() > 0) {
 }
 
 $root = dirname(__DIR__);
+if (is_file(__DIR__ . '/app-root.php')) {
+    $configured = require __DIR__ . '/app-root.php';
+    if (is_string($configured) && $configured !== '') {
+        $root = rtrim($configured, '/\\');
+    }
+}
+define('PUBLIC_ROOT', __DIR__);
+define('APP_ROOT', $root);
 $envFile = $root . '/.env';
 $env = [];
 if (is_file($envFile)) {
@@ -67,7 +82,7 @@ echo "Servidor: " . ($_SERVER['SERVER_SOFTWARE'] ?? '?') . "\n";
 echo "PHP: " . PHP_VERSION . " (" . PHP_SAPI . ")\n";
 echo "REQUEST_URI: " . ($_SERVER['REQUEST_URI'] ?? '?') . "\n";
 echo "SCRIPT_NAME: " . ($_SERVER['SCRIPT_NAME'] ?? '?') . "\n";
-echo "Pasta do projeto: " . $root . "\n";
+echo "Pasta do projeto: " . $root . (is_file(__DIR__ . '/app-root.php') ? ' (layout B, via app-root.php)' : ' (layout A)') . "\n";
 echo "APP_URL no .env: " . ($env['APP_URL'] ?? '(não definido)') . "\n\n";
 
 step('PHP >= 8.2', static fn() => version_compare(PHP_VERSION, '8.2.0', '>='));

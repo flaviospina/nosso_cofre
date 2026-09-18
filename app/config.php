@@ -78,7 +78,7 @@ return [
         'root'     => APP_ROOT,
         'app'      => APP_ROOT . '/app',
         'views'    => APP_ROOT . '/app/Views',
-        'public'   => APP_ROOT . '/public',
+        'public'   => defined('PUBLIC_ROOT') ? PUBLIC_ROOT : APP_ROOT . '/public',
         'storage'  => APP_ROOT . '/storage',
         'logs'     => APP_ROOT . '/storage/logs',
         'cache'    => APP_ROOT . '/storage/cache',
