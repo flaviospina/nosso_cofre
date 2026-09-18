@@ -15,6 +15,12 @@ $hasHousehold = $household !== null;
                 <button type="button" class="btn btn-sm nc-btn-icon" id="themeToggle" aria-label="Alternar tema claro/escuro" title="Tema">
                     <i class="bi bi-moon-stars" aria-hidden="true"></i>
                 </button>
+                <?php if ($user !== null && $hasHousehold): $unread = \App\Services\AlertService::unreadCount((int) $user['id']); ?>
+                    <a class="btn btn-sm nc-btn-icon position-relative" href="<?= e(route('alerts.index')) ?>" aria-label="Avisos<?= $unread > 0 ? ', ' . $unread . ' não lido(s)' : '' ?>" title="Avisos" data-alerts-bell data-unread="<?= $unread ?>">
+                        <i class="bi bi-bell" aria-hidden="true"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger <?= $unread > 0 ? '' : 'd-none' ?>" data-alerts-count><?= $unread ?></span>
+                    </a>
+                <?php endif; ?>
                 <?php if ($user !== null): ?>
                     <div class="dropdown">
                         <button class="btn p-0 border-0 bg-transparent" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu da conta">
@@ -27,9 +33,11 @@ $hasHousehold = $household !== null;
                             <li><a class="dropdown-item" href="<?= e(route('account.two_factor')) ?>"><i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Verificação em duas etapas</a></li>
                             <li><a class="dropdown-item" href="<?= e(route('account.sessions')) ?>"><i class="bi bi-phone me-2" aria-hidden="true"></i>Sessões ativas</a></li>
                             <li><a class="dropdown-item" href="<?= e(route('account.activity')) ?>"><i class="bi bi-clock-history me-2" aria-hidden="true"></i>Minha atividade</a></li>
+                            <li><a class="dropdown-item" href="<?= e(route('notifications.index')) ?>"><i class="bi bi-bell me-2" aria-hidden="true"></i>Notificações</a></li>
                             <li><a class="dropdown-item" href="<?= e(route('privacy.index')) ?>"><i class="bi bi-shield-check me-2" aria-hidden="true"></i>Privacidade e seus dados</a></li>
                             <?php if (\App\Core\Middleware\AdminMiddleware::isAdmin()): ?>
                                 <li><a class="dropdown-item" href="<?= e(route('admin.incidents')) ?>"><i class="bi bi-shield-exclamation me-2" aria-hidden="true"></i>Incidentes (controlador)</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('admin.backups')) ?>"><i class="bi bi-database-down me-2" aria-hidden="true"></i>Backups (controlador)</a></li>
                             <?php endif; ?>
                             <li><hr class="dropdown-divider"></li>
                             <li>
@@ -61,6 +69,7 @@ $hasHousehold = $household !== null;
                                 <li><a class="dropdown-item" href="<?= e(route('goals.index')) ?>"><i class="bi bi-flag me-2" aria-hidden="true"></i>Metas</a></li>
                                 <li><a class="dropdown-item" href="<?= e(route('savings.index')) ?>"><i class="bi bi-check2-square me-2" aria-hidden="true"></i>Plano de ação</a></li>
                                 <li><a class="dropdown-item" href="<?= e(route('simulator.index')) ?>"><i class="bi bi-calculator me-2" aria-hidden="true"></i>Simulador "e se"</a></li>
+                                <li><a class="dropdown-item" href="<?= e(route('cashflow.index')) ?>"><i class="bi bi-graph-down me-2" aria-hidden="true"></i>Previsão de caixa</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="<?= e(route('categories.index')) ?>"><i class="bi bi-tags me-2" aria-hidden="true"></i>Categorias</a></li>
                                 <li><a class="dropdown-item" href="<?= e(route('import.index')) ?>"><i class="bi bi-file-earmark-arrow-up me-2" aria-hidden="true"></i>Importar extrato</a></li>

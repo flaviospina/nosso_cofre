@@ -7,6 +7,7 @@ $items = [
     'account.two_factor' => ['2FA', 'shield-lock'],
     'account.sessions'   => ['Sessões', 'phone'],
     'account.activity'   => ['Atividade', 'clock-history'],
+    'notifications.index'=> ['Notificações', 'bell'],
     'privacy.index'      => ['Privacidade', 'shield-check'],
 ];
 ?>

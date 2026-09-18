@@ -1,7 +1,7 @@
 // public/sw.js — service worker do Nosso Cofre (PWA + base para Web Push).
 // Estratégia: assets em cache primeiro; páginas pela rede com fallback à página offline.
 // Dados financeiros nunca são guardados em cache (respostas de rotas dinâmicas não são armazenadas).
-var CACHE_VERSION = 'nc-v1';
+var CACHE_VERSION = 'nc-v2';
 var BASE = self.registration.scope.replace(/\/$/, '');
 var OFFLINE_URL = BASE + '/offline';
 var PRECACHE = [
@@ -9,7 +9,9 @@ var PRECACHE = [
     BASE + '/assets/css/app.css',
     BASE + '/assets/js/app.js',
     BASE + '/assets/img/favicon.svg',
-    BASE + '/assets/img/icon-192.png'
+    BASE + '/assets/img/icon-192.png',
+    BASE + '/assets/vendor/chart.umd.js',
+    BASE + '/assets/js/dashboard.js'
 ];
 
 self.addEventListener('install', function (event) {
@@ -65,7 +67,7 @@ self.addEventListener('fetch', function (event) {
     }
 });
 
-// --- Web Push (a lógica completa de cor/som/ações entra na fase de notificações) ---
+// --- Web Push: cor (ícone/badge), vibração por tipo, tag para agrupar, ações "Ver" e "Marcar como pago" ---
 self.addEventListener('push', function (event) {
     var payload = {};
     try { payload = event.data ? event.data.json() : {}; } catch (e) { payload = { title: 'Nosso Cofre', body: event.data ? event.data.text() : '' }; }
@@ -75,11 +77,17 @@ self.addEventListener('push', function (event) {
         badge: payload.badge || (BASE + '/assets/img/badge-96.png'),
         tag: payload.tag || 'nosso-cofre',
         renotify: !!payload.renotify,
-        vibrate: payload.vibrate || undefined,
-        data: { url: payload.url || (BASE + '/'), sound: payload.sound || null, type: payload.type || null },
+        vibrate: (payload.vibrate && payload.vibrate.length) ? payload.vibrate : undefined,
+        silent: false,
+        data: { url: payload.url || (BASE + '/'), payUrl: payload.data && payload.data.payUrl ? payload.data.payUrl : null, sound: payload.sound || null, type: payload.type || null, color: payload.color || null, alertId: payload.alertId || null },
         actions: payload.actions || []
     };
-    event.waitUntil(self.registration.showNotification(payload.title || 'Nosso Cofre', options));
+    event.waitUntil(
+        self.registration.showNotification(payload.title || 'Nosso Cofre', options).then(function () {
+            // Aba aberta: toca o som configurado dentro do app
+            return self.clients.matchAll({ type: 'window' }).then(function (list) { list.forEach(function (c) { c.postMessage({ type: 'notification-open', data: options.data }); }); });
+        })
+    );
 });
 
 self.addEventListener('notificationclick', function (event) {

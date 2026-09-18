@@ -388,6 +388,130 @@
         sel.addEventListener('change', function () { if (sel.form) { sel.form.submit(); } });
     });
 
+    // --- Fase 7: avisos em tempo real (toast + som), push por aparelho, pré-visualização ---
+    NC.playSound = function (name, volume) {
+        if (!name || name === 'none') { return; }
+        try {
+            var audio = new Audio(NC.url('assets/sounds/' + name + '.wav'));
+            audio.volume = typeof volume === 'number' ? volume : 0.8;
+            audio.play().catch(function () { /* autoplay bloqueado até a primeira interação */ });
+        } catch (e) {}
+    };
+    NC.showAlert = function (a, volume, vibrate) {
+        NC.toast({ title: a.title, body: a.body || '', color: a.color || null, delay: 8000, vibrate: vibrate && a.type === 'overdue' ? [200, 100, 200] : (vibrate ? [80] : null) });
+        NC.playSound(a.sound, volume);
+    };
+    var bell = document.querySelector('[data-alerts-bell]');
+    var setBell = function (n) {
+        if (!bell) { return; }
+        var badge = bell.querySelector('[data-alerts-count]');
+        if (badge) { badge.textContent = n; badge.classList.toggle('d-none', n <= 0); }
+        bell.setAttribute('data-unread', n);
+    };
+    // Sondagem a cada 60 s: avisos novos viram toast com a cor e o som do tipo (só enquanto o app está aberto)
+    if (bell && !document.querySelector('[data-alerts-page]')) {
+        var lastId = 0;
+        try { lastId = parseInt(sessionStorage.getItem('nc-last-alert') || '0', 10) || 0; } catch (e) {}
+        var first = true;
+        var poll = function () {
+            if (document.hidden) { return; }
+            NC.fetchJson(NC.url('avisos/novos?depois=' + lastId)).then(function (json) {
+                if (!json.ok || !json.data) { return; }
+                setBell(json.data.unread);
+                if (!first) {
+                    (json.data.alerts || []).forEach(function (a) { NC.showAlert(a, NC.volume, NC.vibrate); });
+                }
+                first = false;
+                if (json.data.last) { lastId = json.data.last; try { sessionStorage.setItem('nc-last-alert', String(lastId)); } catch (e) {} }
+            }).catch(function () {});
+        };
+        NC.volume = 0.8; NC.vibrate = true;
+        setTimeout(poll, 1500);
+        setInterval(poll, 60000);
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); } });
+    }
+    // Mensagem do service worker ao abrir uma notificação: toca o som configurado
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', function (ev) {
+            if (ev.data && ev.data.type === 'notification-open' && ev.data.data && ev.data.data.sound) { NC.playSound(ev.data.data.sound, NC.volume); }
+        });
+    }
+
+    var notifPage = document.querySelector('[data-notifications-page]');
+    if (notifPage) {
+        // Pré-visualização "ver como fica": usa cor e som escolhidos no formulário, sem enviar nada
+        notifPage.querySelectorAll('[data-preview-type]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var type = btn.getAttribute('data-preview-type');
+                var color = notifPage.querySelector('input[name="types[' + type + '][color]"]:checked');
+                var sound = notifPage.querySelector('select[name="types[' + type + '][sound]"]');
+                var volume = notifPage.querySelector('[data-volume]');
+                var vibrate = notifPage.querySelector('#vibrate');
+                NC.showAlert({ title: btn.getAttribute('data-preview-title'), body: 'Exemplo de aviso com a cor e o som escolhidos.', color: color ? color.value : null, sound: sound ? sound.value : null, type: type }, volume ? parseFloat(volume.value) : 0.8, vibrate ? vibrate.checked : false);
+            });
+        });
+        // Bolinha de cor do acordeão acompanha a cor escolhida
+        notifPage.querySelectorAll('input[type="radio"][name$="[color]"]').forEach(function (r) {
+            r.addEventListener('change', function () {
+                var type = r.name.replace(/^types\[([^\]]+)\].*$/, '$1');
+                var dot = notifPage.querySelector('[data-preview-dot="' + type + '"]');
+                if (dot) { dot.style.backgroundColor = r.value; }
+            });
+        });
+        var vol = notifPage.querySelector('[data-volume]');
+        var volLabel = notifPage.querySelector('[data-volume-label]');
+        if (vol && volLabel) { vol.addEventListener('input', function () { volLabel.textContent = Math.round(parseFloat(vol.value) * 100); }); }
+        // Interruptor "lançamentos de outros membros" espelha o modo (nunca ↔ acima de um valor)
+        var memberSwitch = notifPage.querySelector('[data-member-switch]');
+        var memberMode = notifPage.querySelector('[data-member-mode]');
+        if (memberSwitch && memberMode) {
+            memberSwitch.addEventListener('change', function () { if (!memberSwitch.checked) { memberMode.value = 'never'; } else if (memberMode.value === 'never') { memberMode.value = 'above'; } memberMode.dispatchEvent(new Event('change')); });
+            memberMode.addEventListener('change', function () { memberSwitch.checked = memberMode.value !== 'never'; });
+        }
+        // Push: pede permissão, assina no PushManager com a chave VAPID e registra no servidor
+        var subscribeBtn = notifPage.querySelector('[data-push-subscribe]');
+        var status = notifPage.querySelector('[data-push-status]');
+        var say = function (t) { if (status) { status.textContent = t; } };
+        var urlBase64ToUint8Array = function (base64String) {
+            var padding = '='.repeat((4 - base64String.length % 4) % 4);
+            var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            var raw = window.atob(base64);
+            var out = new Uint8Array(raw.length);
+            for (var i = 0; i < raw.length; ++i) { out[i] = raw.charCodeAt(i); }
+            return out;
+        };
+        if (subscribeBtn) {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+                subscribeBtn.disabled = true; say('Este navegador não suporta push. No iPhone, instale o app na tela inicial (iOS 16.4 ou superior).');
+            } else if (window.location.protocol !== 'https:' && window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost') {
+                subscribeBtn.disabled = true; say('Push exige HTTPS.');
+            }
+            subscribeBtn.addEventListener('click', function () {
+                subscribeBtn.disabled = true; say('Pedindo permissão…');
+                Notification.requestPermission().then(function (perm) {
+                    if (perm !== 'granted') { say('Permissão negada no navegador. Libere em "Configurações do site → Notificações".'); subscribeBtn.disabled = false; return; }
+                    return navigator.serviceWorker.ready.then(function (reg) {
+                        return reg.pushManager.getSubscription().then(function (existing) {
+                            return existing || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(notifPage.getAttribute('data-vapid')) });
+                        });
+                    }).then(function (sub) {
+                        return NC.fetchJson(notifPage.getAttribute('data-subscribe-url'), { method: 'POST', body: { subscription: sub.toJSON(), label: navigator.userAgentData && navigator.userAgentData.platform ? navigator.userAgentData.platform : null } });
+                    }).then(function (json) {
+                        say(json && json.ok ? 'Aparelho registrado. Use "Testar aqui" na lista.' : ((json && json.mensagem) || 'Não foi possível registrar.'));
+                        if (json && json.ok) { setTimeout(function () { window.location.reload(); }, 1200); }
+                    });
+                }).catch(function (err) { say('Falha: ' + (err && err.message ? err.message : err)); subscribeBtn.disabled = false; });
+            });
+        }
+    }
+    // Central de avisos: clicar num aviso marca como lido
+    document.querySelectorAll('[data-alerts-page] [data-alert-id] a').forEach(function (link) {
+        link.addEventListener('click', function () {
+            var id = link.closest('[data-alert-id]').getAttribute('data-alert-id');
+            NC.fetchJson(NC.url('avisos/' + id + '/lida'), { method: 'POST', body: {} }).catch(function () {});
+        });
+    });
+
     // --- Service worker (PWA) ---
     if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
         window.addEventListener('load', function () {

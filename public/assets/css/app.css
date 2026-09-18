@@ -141,3 +141,12 @@ html, body { min-height: 100%; }
     .nc-main { max-width: none; }
     .card { border: 0; box-shadow: none; }
 }
+
+/* --- Fase 7: notificações --- */
+.nc-swatch { cursor: pointer; margin: 0; }
+.nc-swatch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.nc-swatch span:first-of-type { display: inline-block; width: 1.75rem; height: 1.75rem; border-radius: 999px; border: 3px solid transparent; box-shadow: 0 0 0 1px var(--bs-border-color); }
+.nc-swatch input:checked + span { border-color: var(--bs-body-bg); box-shadow: 0 0 0 3px var(--nc-brand); }
+.nc-swatch input:focus-visible + span { outline: 2px solid var(--nc-brand); outline-offset: 2px; }
+.nc-prewrap { white-space: pre-line; }
+.accordion-button:not(.collapsed) { background: transparent; box-shadow: none; }

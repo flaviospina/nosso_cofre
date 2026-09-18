@@ -47,6 +47,15 @@ try {
         $rec = \App\Services\RecurrenceService::generateAll();
         $lines[] = "recorrências: {$rec['criados']} ocorrência(s) gerada(s) em {$rec['lares']} lar(es)";
 
+        // Fase 7: avisos (detecção + entrega) a cada execução; backup diário criptografado
+        $notif = \App\Services\NotificationScheduler::run();
+        $lines[] = "avisos: {$notif['criados']} criado(s), {$notif['push']} push, {$notif['email']} e-mail, {$notif['adiados']} adiado(s)";
+        if ((string) Config::get('backup.key', '') !== '' && !\App\Services\BackupService::madeToday()) {
+            $backup = \App\Services\BackupService::create();
+            $purged = \App\Services\BackupService::purge();
+            $lines[] = 'backup: ' . basename($backup) . " (removidos {$purged} antigos)";
+        }
+
         // Fase 3: retenção LGPD (uma vez por hora basta) e exclusões agendadas
         $lastRetention = Database::scalar("SELECT MAX(started_at) FROM cron_runs WHERE task = 'retention'");
         if ($lastRetention === null || strtotime((string) $lastRetention . ' UTC') < time() - 3600) {

@@ -20,6 +20,10 @@ use App\Controllers\GoalController;
 use App\Controllers\SavingsActionController;
 use App\Controllers\SimulatorController;
 use App\Controllers\ReportController;
+use App\Controllers\NotificationController;
+use App\Controllers\AlertController;
+use App\Controllers\CashflowController;
+use App\Controllers\AdminBackupController;
 use App\Controllers\InvitationController;
 use App\Controllers\LegalController;
 use App\Controllers\OnboardingController;
@@ -40,6 +44,8 @@ $router->get('/saude', [SystemController::class, 'health'], 'system.health');
 $router->get('/instalar', [SystemController::class, 'install'], 'system.install');
 $router->get('/cron/run', [SystemController::class, 'cron'], 'system.cron')->middleware('cron');
 $router->match(['GET', 'POST'], '/sistema/migrar', [SystemController::class, 'migrate'], 'system.migrate')->middleware('cron');
+$router->get('/sistema/vapid', [SystemController::class, 'vapid'], 'system.vapid')->middleware('cron');
+$router->get('/avisos/acao/{token}', [AlertController::class, 'action'], 'alerts.action');
 
 // --- Documentos legais (públicos) ---
 $router->get('/termos', [LegalController::class, 'terms'], 'legal.terms');
@@ -106,6 +112,15 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/privacidade/excluir-lar', [PrivacyController::class, 'requestHouseholdDeletion'], 'privacy.household.delete');
         $r->post('/privacidade/excluir-lar/cancelar', [PrivacyController::class, 'cancelHouseholdDeletion'], 'privacy.household.cancel');
         $r->post('/privacidade/sair-do-lar', [PrivacyController::class, 'leaveHousehold'], 'privacy.leave');
+
+        // Fase 7: notificações 100 % configuráveis
+        $r->get('/notificacoes', [NotificationController::class, 'index'], 'notifications.index');
+        $r->post('/notificacoes', [NotificationController::class, 'update'], 'notifications.update');
+        $r->get('/notificacoes/vapid', [NotificationController::class, 'vapidPublic'], 'notifications.vapid');
+        $r->post('/notificacoes/assinar', [NotificationController::class, 'subscribe'], 'notifications.subscribe');
+        $r->post('/notificacoes/cancelar', [NotificationController::class, 'unsubscribe'], 'notifications.unsubscribe');
+        $r->post('/notificacoes/aparelhos/{id:\d+}/remover', [NotificationController::class, 'removeDevice'], 'notifications.device.remove');
+        $r->post('/notificacoes/aparelhos/{id:\d+}/testar', [NotificationController::class, 'testDevice'], 'notifications.device.test');
     });
 
     // Área do controlador (ADMIN_EMAILS)
@@ -116,6 +131,10 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->post('/incidentes/{id:\d+}/comunicar', [AdminIncidentController::class, 'notify'], 'admin.incidents.notify');
         $r->post('/incidentes/{id:\d+}/encerrar', [AdminIncidentController::class, 'close'], 'admin.incidents.close');
         $r->post('/incidentes/{id:\d+}/anpd', [AdminIncidentController::class, 'anpd'], 'admin.incidents.anpd');
+        // Fase 7: backups criptografados
+        $r->get('/backups', [AdminBackupController::class, 'index'], 'admin.backups');
+        $r->post('/backups/gerar', [AdminBackupController::class, 'create'], 'admin.backups.create');
+        $r->get('/backups/{name}', [AdminBackupController::class, 'download'], 'admin.backups.download');
     });
 
     // Área do lar (exige lar ativo e, para owner/admin de família, 2FA)
@@ -217,5 +236,14 @@ $router->group(['middleware' => ['auth']], static function (Router $r): void {
         $r->get('/relatorios/membros', [ReportController::class, 'members'], 'reports.members');
         $r->get('/relatorios/categoria', [ReportController::class, 'category'], 'reports.category');
         $r->get('/relatorios/conta', [ReportController::class, 'account'], 'reports.account');
+
+        // Fase 7: previsão de caixa, central de avisos
+        $r->get('/previsao', [CashflowController::class, 'index'], 'cashflow.index');
+        $r->get('/avisos', [AlertController::class, 'index'], 'alerts.index');
+        $r->get('/avisos/novos', [AlertController::class, 'poll'], 'alerts.poll');
+        $r->post('/avisos/todas-lidas', [AlertController::class, 'readAll'], 'alerts.read_all');
+        $r->post('/avisos/{id:\d+}/lida', [AlertController::class, 'read'], 'alerts.read');
+        $r->post('/avisos/silenciar/{type}', [AlertController::class, 'mute'], 'alerts.mute');
+        $r->post('/avisos/reativar/{type}', [AlertController::class, 'unmute'], 'alerts.unmute');
     });
 });

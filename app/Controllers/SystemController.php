@@ -31,10 +31,15 @@ final class SystemController extends Controller
         foreach (['pdo_mysql' => 'PDO MySQL', 'openssl' => 'OpenSSL', 'mbstring' => 'mbstring', 'json' => 'JSON', 'fileinfo' => 'fileinfo (uploads)', 'gd' => 'GD (imagens)', 'zip' => 'Zip (exportações)', 'curl' => 'cURL (Web Push)'] as $ext => $label) {
             $checks['ext_' . $ext] = ['label' => 'Extensão ' . $label, 'ok' => extension_loaded($ext), 'info' => ''];
         }
-        $checks['gmp_bcmath'] = [
-            'label' => 'Extensão gmp ou bcmath (assinatura VAPID do Web Push)',
-            'ok'    => extension_loaded('gmp') || extension_loaded('bcmath'),
-            'info'  => 'Ative em cPanel → Select PHP Version (necessário só na fase de notificações)',
+        $checks['openssl_ec'] = [
+            'label' => 'OpenSSL com curva P-256 (Web Push/VAPID)',
+            'ok'    => function_exists('openssl_pkey_derive') && function_exists('hash_hkdf') && in_array('aes-128-gcm', openssl_get_cipher_methods(), true),
+            'info'  => 'Padrão no PHP 8 do cPanel; sem isso o push não funciona (o e-mail continua)',
+        ];
+        $checks['vapid'] = [
+            'label' => 'Chaves VAPID configuradas (Web Push)',
+            'ok'    => (string) Config::get('vapid.public', '') !== '' && (string) Config::get('vapid.private', '') !== '',
+            'info'  => 'Gere em /sistema/vapid?token=SEU_CRON_TOKEN e cole no .env',
         ];
         $checks['argon2'] = [
             'label' => 'Argon2id disponível',
@@ -147,6 +152,21 @@ final class SystemController extends Controller
             'appKey'    => Crypto::generateKey(),
             'backupKey' => Crypto::generateKey(),
             'cronToken' => Crypto::randomToken(32),
+        ]);
+    }
+
+    /** /sistema/vapid?token=... — gera um par de chaves VAPID para colar no .env (sem terminal). */
+    public function vapid(): Response
+    {
+        $configured = (string) Config::get('vapid.public', '') !== '' && (string) Config::get('vapid.private', '') !== '';
+        $keys = \App\Core\WebPush::generateVapidKeys();
+        Logger::info('Tela /sistema/vapid acessada', ['ip' => $this->request->ip(), 'configured' => $configured]);
+        return $this->view('system/vapid', [
+            'title'      => 'Chaves VAPID (Web Push)',
+            'keys'       => $keys,
+            'configured' => $configured,
+            'current'    => (string) Config::get('vapid.public', ''),
+            'subject'    => (string) Config::get('vapid.subject', '') ?: 'mailto:' . Config::get('mail.from_address', 'cofre@exemplo.com'),
         ]);
     }
 

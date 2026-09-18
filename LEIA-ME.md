@@ -79,7 +79,7 @@ Em ambos: pastas `755`, arquivos `644`, nunca `777`; marque *Mostrar arquivos oc
 - Abra `https://itthrive.com.br/cofre/` — a página inicial deve aparecer com o ícone e o tema claro/escuro funcionando.
 - No celular (Chrome/Android ou Safari/iOS), *Adicionar à tela inicial* instala a PWA.
 
-### 3.5 Cron (a partir da fase 7, mas pode ser cadastrado já)
+### 3.5 Cron (obrigatório a partir da fase 7)
 cPanel → **Cron Jobs** → *Adicionar novo*, a cada 5 minutos (`*/5 * * * *`), com um dos comandos:
 
 ```
@@ -172,6 +172,15 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Relatórios** (`/relatorios`): mensal por categoria (pai › filha, % do total, comparação com o mês anterior e com o mesmo mês do ano passado, ranking "onde o dinheiro mais cresceu"), anual (12 meses, melhor e pior mês, taxa de poupança), por membro, por categoria (evolução em 12 meses + lançamentos do mês) e por conta/cartão (extrato com saldo inicial e final; para cartões, a **fatura** pelo dia de fechamento, com vencimento). Todos aceitam `?formato=csv` (UTF-8 com BOM e `;`, abre direto no Excel pt-BR) e `?formato=pdf`.
 - **PDF sem biblioteca**: `app/Core/Pdf.php` gera PDF 1.4 com Helvetica/WinAnsi (acentos ok), títulos, parágrafos e tabelas com cabeçalho repetido a cada página. Não faz imagens nem fontes embutidas: é o "PDF simples" do §6.5. Cada exportação fica no log de auditoria (`report.exported`).
 
+### 3.16 Notificações, Web Push, cron e backup (fase 7)
+- **Tela** Conta → *Notificações* (`/conta/notificacoes`). Nada é enviado por padrão além dos e-mails de segurança. Cada tipo de aviso (dinheiro entrando/saindo, conta a vencer com os dias escolhidos, conta atrasada, orçamento em X %, assinatura duplicada/mais cara, evento previsto, meta batida, mês apertado, lançamentos de outros membros, resumo periódico, segurança) tem liga/desliga, canal (só no app, push, e-mail, ambos), cor e som. Também: modo imediato/agrupado/só resumo, limite de pushes por dia, valor mínimo, horário silencioso por dia da semana, dias sem avisos, volume e vibração, "ver como fica" (toast + som na hora, sem enviar) e a lista de aparelhos com "testar aqui" e "remover". Os canais espelham os consentimentos (`digest_email`, `push`) da área de Privacidade; "desligar todos os avisos" continua lá.
+- **Central de avisos** (`/avisos`, sino na barra): histórico, filtro por tipo, lido/não lido, "silenciar este tipo por 7 dias". Com o app aberto, avisos novos viram toast com cor e som (sondagem a cada 60 s). Nas notificações de conta a vencer/atrasada, a ação "Marcar como pago" usa um link assinado válido por 7 dias e exige a sessão do próprio usuário.
+- **Web Push sem biblioteca externa**: `app/Core/WebPush.php` implementa VAPID (JWT ES256) e a cifra `aes128gcm` (RFC 8291) só com OpenSSL e curl, então não há dependência do composer nem de gmp/bcmath. **Ativar**: abra `/sistema/vapid?token=SEU_CRON_TOKEN`, copie as três linhas para o `.env`, confira em `/saude`. O push exige HTTPS e, no iPhone, o app instalado na tela inicial (iOS 16.4+). Assinatura que falha 3 vezes seguidas é desativada e o usuário é avisado por e-mail e na Central.
+- **Sons** (`public/assets/sounds/*.wav`): sintetizados por `tools/gerar-sons.php` (sem direitos de terceiros). O som toca dentro do app; o push usa vibração e a cor no ícone.
+- **Cron a cada 5 minutos** (cPanel → Cron Jobs): `curl -s "https://itthrive.com.br/nossocofre/sistema/cron?token=SEU_CRON_TOKEN" > /dev/null` ou `php /home1/itthri79/nossocofre_app/cron/run.php`. Cada execução: gera recorrências, roda o `NotificationScheduler` (detecção com deduplicação + entrega respeitando janelas, agrupamento e limite diário), reenvia e-mails pendentes, faz o backup diário e a retenção uma vez por hora. Adiados por horário silencioso ficam em `alerts.scheduled_for`.
+- **Previsão de caixa** (`/previsao`): saldo líquido de hoje + pendentes, agendados, recorrências ainda não geradas e faturas de cartão no vencimento, dia a dia por até 120 dias; mostra o primeiro dia negativo, o ponto mais baixo e a **sobra segura** (quanto dá para guardar sem faltar até a próxima receita). O aviso "mês apertado" usa esse cálculo.
+- **Backup**: com `BACKUP_KEY` no `.env`, o cron gera um `storage/backups/nosso-cofre-AAAA-MM-DD-HHMM.sql.gz.enc` por dia (SQL completo em PHP puro, gzip, AES-256-GCM) e mantém `BACKUP_RETENTION_DAYS`. Quem está em `ADMIN_EMAILS` vê *Backups (controlador)* para gerar agora e baixar. **Restaurar**: (a) com terminal, `php tools/restaurar-backup.php arquivo.sql.gz.enc` (pede confirmação); (b) sem terminal, no seu computador com PHP instalado: `php tools/restaurar-backup.php arquivo.sql.gz.enc --somente-sql > restauracao.sql` (o `.env` local precisa da mesma `BACKUP_KEY`) e importe o `.sql` pelo phpMyAdmin. Guarde a `BACKUP_KEY` fora do servidor: sem ela o backup é ilegível.
+
 ## 4. Decisões técnicas que valem registrar
 
 - **Subpasta `/cofre`**: o `.htaccess` da raiz reescreve tudo para `public/` sem `RewriteBase`, e o `Request` remove a subpasta do caminho a partir de `APP_URL`. Mover para um domínio próprio exige só trocar `APP_URL`.
@@ -200,6 +209,9 @@ O sistema envia e-mails de confirmação de cadastro, recuperação de senha, co
 - **Chart.js vendorizado em vez de CDN**: o painel é a tela mais usada e não pode depender de um terceiro fora do ar; o arquivo tem 200 KB e é servido com cache pelo Apache. Os demais assets (Bootstrap, ícones) continuam no jsDelivr com SRI.
 - **Idade do dinheiro simplificada**: em vez do cálculo FIFO do YNAB (que exige histórico completo por real), usamos saldo líquido ÷ gasto diário médio de 90 dias — o mesmo significado prático ("quantos dias você aguenta sem receita") com dados que o app já tem.
 - **Relatórios calculados na hora**, sem tabelas de agregados: o volume de um lar é pequeno (milhares de linhas por ano) e os índices por lar + data resolvem; evita jobs de recomputação no cron do cPanel.
+- **Web Push em código próprio** (~250 linhas) em vez de `minishlink/web-push`: a biblioteca puxa uma dúzia de pacotes do composer e exige gmp/bcmath, que o HostGator nem sempre tem; o PHP 8 traz `openssl_pkey_derive` e `hash_hkdf`, que bastam para VAPID e RFC 8291, e o teste unitário decifra o payload como o navegador faria.
+- **Avisos como linhas em `alerts`** com `dedupe_key`: a detecção pode rodar quantas vezes for (cron a cada 5 min) sem repetir; a entrega é uma etapa separada, o que permite adiar por horário silencioso, agrupar e limitar por dia sem perder nada.
+- **Backup em PHP puro**: `mysqldump` e `exec()` costumam estar bloqueados no compartilhado; o dump por `SELECT` em blocos de 500 linhas cabe no limite de memória do PHP para o volume de um lar.
 - **Migrações versionadas** em `sql/migrations` com tela `/sistema/migrar` protegida pelo `CRON_TOKEN`, porque `schema.sql` (CREATE TABLE IF NOT EXISTS) não altera tabelas existentes.
 
 ## 5. Dados de exemplo (seed.sql)
@@ -217,6 +229,7 @@ bash tools/smoke-fase3.sh              # teste de ponta a ponta da fase 3 (depoi
 bash tools/smoke-fase4.sh              # teste de ponta a ponta da fase 4 (banco limpo com seed; usa o lar "Família Spina")
 bash tools/smoke-fase5.sh              # teste de ponta a ponta da fase 5 (banco limpo com seed)
 bash tools/smoke-fase6.sh              # teste de ponta a ponta da fase 6 (banco limpo com seed)
+bash tools/smoke-fase7.sh              # teste de ponta a ponta da fase 7 (banco limpo; .env com BACKUP_KEY, VAPID_* e CRON_TOKEN)
 ```
 Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://127.0.0.1:8080/cofre/`.
 
@@ -227,8 +240,10 @@ Com `APP_URL=http://127.0.0.1:8080/cofre` no `.env` o app responde em `http://12
 3. ✅ LGPD: políticas versionadas, consentimentos, "Privacidade e seus dados", exportação, anonimização, exclusão com carência, incidentes, retenção
 4. ✅ Cadastros financeiros: contas e cartões, categorias, lançamentos (rápido, parcelas, transferências, privado, lote, lixeira, modelos), comprovantes sem EXIF, importação CSV/OFX com duplicados e sugestão de categoria
 5. ✅ Recorrências, radar de assinaturas, orçamento (projeção, essencial × supérfluo, 50/30/20), metas com aportes, plano de ação (estimado × realizado) e simulador "e se"
-6. ✅ Painel com os 11 indicadores e gráficos, relatórios (mensal, anual, membro, categoria, conta/fatura) com CSV e PDF (esta entrega)
-7. Notificações: configuração, PWA/Web Push, sons e cores, scheduler, central, cron, backup
+6. ✅ Painel com os 11 indicadores e gráficos, relatórios (mensal, anual, membro, categoria, conta/fatura) com CSV e PDF
+7. ✅ Notificações 100 % configuráveis, Web Push próprio, sons e cores, agendador, central de avisos, previsão de caixa, cron e backup criptografado (esta entrega)
 8. Testes, revisão final de segurança/LGPD, polimento mobile
+9. Carteira de investimentos (cadastro, rentabilidade, alocação, liquidez, IR/FGC, "melhor momento de aplicar" por regras)
+10. Diferenciais: divisão justa entre o casal, ritual da conversa financeira, compra com tempo de espera, preço em horas de trabalho, custo do hábito, inflação pessoal, cartão inteligente, tempo até a independência
 
 Seções de SMTP, VAPID, restauração de backup e procedimento de incidente LGPD entram nas fases correspondentes.

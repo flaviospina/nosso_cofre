@@ -97,6 +97,18 @@
                 scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: short, maxTicksLimit: 5 }, border: { display: false } } } }
         });
     }
+    // Previsão de caixa: saldo dia a dia; abaixo de zero pinta em vermelho (área) com linha de base
+    var cfEl = document.getElementById('chartCashflow');
+    if (cfEl && data.cashflow) {
+        var vals = data.cashflow.map(function (r) { return r.balance; });
+        new Chart(cfEl, {
+            type: 'line',
+            data: { labels: data.cashflow.map(function (r) { return r.date; }), datasets: [{ label: 'Saldo previsto', data: vals, borderColor: BRAND, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, tension: .2,
+                fill: { target: { value: 0 }, above: BRAND + '22', below: 'rgba(185,28,28,.25)' }, segment: { borderColor: function (ctx) { return ctx.p1.parsed.y < 0 ? '#b91c1c' : BRAND; } } }] },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return ' ' + brl(c.parsed.y); } } } },
+                scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { grid: { color: grid }, ticks: { callback: short, maxTicksLimit: 6 }, border: { display: false } } } }
+        });
+    }
     // Relatório anual: receitas × despesas por mês
     var annualEl = document.getElementById('chartAnnual');
     if (annualEl && data.annual) {

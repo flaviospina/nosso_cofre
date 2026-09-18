@@ -199,6 +199,8 @@ final class AuthService
 
         if ($isNewDevice) {
             Logger::security('Login de aparelho novo', ['user_id' => $user['id'], 'ip' => $request->ip()]);
+            $securityPush = \App\Services\NotificationSettingsService::effective(\App\Services\NotificationSettingsService::load((int) $user['id']), 'security')['push'];
+            \App\Services\AlertService::create((int) $user['id'], 'security', 'Novo acesso à sua conta', 'Entrada de ' . $request->deviceLabel() . ' (IP ' . $request->ip() . '). Se não foi você, troque a senha e encerre as outras sessões.', ['channel' => $securityPush ? 'push' : 'none', 'url' => '/conta/sessoes', 'dedupe_key' => 'security:device:' . substr($deviceHash, 0, 16) . ':' . gmdate('YmdH')]);
             Mailer::send((string) $user['email'], (string) $user['name'], 'Novo acesso à sua conta do Nosso Cofre', 'new-device', [
                 'name'   => $user['name'],
                 'device' => $request->deviceLabel(),
